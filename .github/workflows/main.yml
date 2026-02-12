@@ -15,16 +15,7 @@ on:
         default: 'RELEASE'
         options:
           - 'RELEASE'
-          - 'BETA'
-      clang_version:
-        description: 'Select Clang Version'
-        required: true
-        type: choice
-        options:
-          - 'r416183b (Clang 12)'
-          - 'r536225 (Clang 19)'
-          - 'r547379 (Clang 20)'
-          - 'r584948b (Clang 22)'
+          - 'BETA'         
       hook_method:
         description: 'Select Hook Method'
         required: true
@@ -288,56 +279,19 @@ jobs:
           echo "-$CLEAN_NAME" > localversion
           echo "✅ Version set to: -$CLEAN_NAME"
 
-      - name: Setup Clang
+      - name: Setup Compiler (Clang 17)
         working-directory: gki
         run: |
           mkdir -p prebuilts-master/clang/host/linux-x86
-          CLANG_SEL="${{ github.event.inputs.clang_version }}"
+          ACTUAL_VER="clang-r487747c"
+          ACTUAL_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-14.0.0_r1/clang-r487747c.tar.gz"
+          EXPECTED_VER="clang-r563880b"
+          mkdir -p "prebuilts-master/clang/host/linux-x86/$ACTUAL_VER"
+          curl -L "$ACTUAL_URL" | tar -xz -C "prebuilts-master/clang/host/linux-x86/$ACTUAL_VER"
+          cd prebuilts-master/clang/host/linux-x86
+          rm -rf "$EXPECTED_VER"
+          ln -s "$ACTUAL_VER" "$EXPECTED_VER"
           
-          if [ "$CLANG_SEL" == "r416183b (Clang 12)" ]; then
-            echo "🛠️ Setup Clang 12 (LineageOS)"
-            CLANG_URL="https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b/archive/refs/heads/lineage-20.0.tar.gz"
-            mkdir -p prebuilts-master/clang/host/linux-x86/clang-r416183b
-            curl -L "${CLANG_URL}" -o clang12-temp.tar.gz
-            # Extract content directly into clang-r416183b, stripping the root folder from the archive
-            tar -xzf clang12-temp.tar.gz -C prebuilts-master/clang/host/linux-x86/clang-r416183b --strip-components=1
-            rm -f clang12-temp.tar.gz
-            echo "✅ Clang 12 installed directly to clang-r416183b"
-
-          elif [ "$CLANG_SEL" == "r584948b (Clang 22)" ]; then
-            echo "🛠️ Setup Clang 22 (Latest)"
-            CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/105aba85d97a53d364585ca755752dae054b49e8/clang-r584948b.tar.gz"
-            mkdir -p prebuilts-master/clang/host/linux-x86/clang-r584948b
-            curl -L "${CLANG_URL}" -o clang-temp.tar.gz
-            tar -xzf clang-temp.tar.gz -C prebuilts-master/clang/host/linux-x86/clang-r584948b
-            rm -f clang-temp.tar.gz
-            rm -rf clang-r416183b
-            ln -sf clang-r584948b prebuilts-master/clang/host/linux-x86/clang-r416183b
-
-          elif [ "$CLANG_SEL" == "r536225 (Clang 19)" ]; then
-            echo "🛠️ Setup Clang 19"
-            CLANG_VER="clang-r536225"
-            CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main-kernel-2025/clang-r536225.tar.gz"
-            mkdir -p prebuilts-master/clang/host/linux-x86/$CLANG_VER
-            cd prebuilts-master/clang/host/linux-x86
-            curl -L "${CLANG_URL}" -o clang-temp.tar.gz
-            tar -xzf clang-temp.tar.gz -C $CLANG_VER
-            rm -f clang-temp.tar.gz
-            rm -rf clang-r416183b
-            ln -sf $CLANG_VER clang-r416183b
-          
-          else
-            echo "🛠️ Setup Clang 20 (Default)"
-            CLANG_VER="clang-r547379"
-            CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/62cdcefa89e31af2d72c366e8b5ef8db84caea62/clang-r547379.tar.gz"
-            mkdir -p prebuilts-master/clang/host/linux-x86/$CLANG_VER
-            cd prebuilts-master/clang/host/linux-x86
-            curl -L "${CLANG_URL}" -o clang-temp.tar.gz
-            tar -xzf clang-temp.tar.gz -C $CLANG_VER
-            rm -f clang-temp.tar.gz
-            rm -rf clang-r416183b
-            ln -sf $CLANG_VER clang-r416183b
-          fi
 
       - name: Execute Build
         working-directory: gki
