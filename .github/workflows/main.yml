@@ -85,11 +85,11 @@ jobs:
       - name: Update kernel source for GKI 5.10
         run: |
           cd gki/common
-          git remote add Kingfinik98 https://github.com/Kingfinik98/kernel-android12-5.10.git
-          git fetch -j12 Kingfinik98
-          git checkout -b update-master Kingfinik98/master
+          git remote add rama https://github.com/ramabondanp/android_kernel_common-5.10.git
+          git fetch -j12 rama
+          git checkout -b update-android12-5.10-staging rama/android12-5.10-staging
           rm -rf drivers/staging/kernelsu
-
+                
       - name: Apply Infinix GT 20 Pro Camera Fix
         working-directory: gki/common
         run: |
@@ -339,17 +339,17 @@ jobs:
             ln -sf $CLANG_VER clang-r416183b
           fi
 
-      - name: Commit changes
-        working-directory: gki/common
-        run: |
-          git add .
-          git commit -m "Final clean tree before build" || true
-
-      - name: Compile
+      - name: Execute Build
         working-directory: gki
         run: |
-          LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
-
+          echo "🚀 Starting Compilation for ${{ matrix.variant }}..."
+          export KMI_SYMBOL_LIST_STRICT_MODE=0
+          export KMI_ENFORCED=0
+          export TRIM_NONLISTED_KMI=0
+          LTO=thin LLVM=1 LLVM_IAS=1 \
+          KCFLAGS="-O3 -Wno-error=implicit-function-declaration -Wno-error=unused-command-line-argument" \
+          BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
+          
       # --- PACKAGING & RELEASE ---
       - name: Packaging anykernel & Release
         if: success()
@@ -397,6 +397,7 @@ jobs:
           else
             echo "✅ Release created and asset uploaded successfully."
           fi
+          
       - name: Archive Build Log
         if: always()
         uses: actions/upload-artifact@v4
