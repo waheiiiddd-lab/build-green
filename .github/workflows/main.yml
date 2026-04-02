@@ -130,15 +130,8 @@ jobs:
           done
           echo "✅ Existing KernelSU drivers removed"
           echo "➡️ Menambahkan KernelSU-Next"
-          curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
+          curl -LSs "https://raw.githubusercontent.com/Kingfinik98/VortexSU/refs/heads/main/kernel/setup.sh" | bash -s main
           echo "✅ KernelSU-Next added"
-          sed -i 's/$(error KSU requires Kprobes; enable it (defconfig))/# $(error KSU requires Kprobes; enable it (defconfig))/' drivers/kernelsu/Kbuild
-          echo "✅ Kbuild patched."
-          # Apply All Managers Patch
-            echo "🔧 Applying Patch for All Managers Support..."
-            curl -LSs "https://raw.githubusercontent.com/Kingfinik98/gki-builder/refs/heads/6.x/kernel-patches/ksu/ksun-add-more-managers-support.patch" -o /tmp/ksun-add-more-managers-support.patch
-            cd KernelSU-Next && patch -p1 < /tmp/ksun-add-more-managers-support.patch && cd ..
-            echo "✅ All Managers Patch Applied"
           HOOK_METHOD="${{ github.event.inputs.hook_method }}"
           if [ "$HOOK_METHOD" = "susfs" ]; then
             echo "➡️ Cloning susfs4ksu (versi baru)"
@@ -156,23 +149,6 @@ jobs:
             echo "➡️ Menggunakan metode Kprobes Hook"
             echo "✅ Kprobes setup selesai"
           fi
-
-      - name: Apply common fixes
-        working-directory: gki/common
-        run: |
-          echo "Applying fixes for Kingfinik98 kernel source..."
-          echo "🛠️ Applying fix for undefined SUSFS symbols (KernelSU-Next)..."
-          sed -i 's/#ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME/#if 0 \/\* CONFIG_KSU_SUSFS_SPOOF_UNAME Disabled to fix build \*\//' drivers/kernelsu/supercalls.c
-            echo "✅ SUSFS symbol fix applied for KernelSU-Next."
-          
-      - name: Replace 500Hz
-        working-directory: gki/common
-        run: |
-          KCONFIG_HZ="kernel/Kconfig.hz"
-          # add 500hz
-          sed -i 's/config HZ_500/config HZ_500/g' "$KCONFIG_HZ"
-          sed -i 's/bool "500 HZ"/bool "500 HZ"/g' "$KCONFIG_HZ"
-          sed -i 's/default 500 if HZ_500/default 500 if HZ_500/g' "$KCONFIG_HZ"
 
       - name: Fix Stack Protector
         working-directory: gki/common
@@ -248,8 +224,8 @@ jobs:
           # --- Universal Performance Tuning (Wajib 500Hz untuk semua SoC) ---
           cat >> $DEFCONFIG <<EOF
           # --- Universal Performance Tuning (Wajib 500Hz) ---
-          CONFIG_HZ=500
-          CONFIG_HZ_500=y
+          CONFIG_HZ=300
+          CONFIG_HZ_300=y
           CONFIG_CPU_FREQ=y
           CONFIG_HIGH_RES_TIMERS=y
           EOF
