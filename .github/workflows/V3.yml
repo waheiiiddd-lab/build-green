@@ -282,26 +282,27 @@ jobs:
           KCFLAGS="-O3 -Wno-error=implicit-function-declaration -Wno-error=unused-command-line-argument" \
           BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
           
-      # --- PACKAGING & RELEASE ---
-  
       - name: Packaging anykernel & Release
         if: success()
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          # Ambil Base Version dari Makefile
-          BASE_VER=$(make -s kernelversion -C gki/common | tr -d '\n\r')
-          FULL_VER=$(make -s kernelversion -C gki/common | tr -d '\n\r')
+          # Ambil versi kernel untuk penamaan
+          cd gki/common
+          BASE_VER=$(make -s kernelversion | tr -d '\n\r')
+          cd ../..
+          
           DATE=$(date +"%Y%m%d")
           
-          # Ambil nama dari Input User
-          KNAME="${{ github.event.inputs.kernel_name }}"
-          [ -z "$KNAME" ] && KNAME="Zixine"
+          # Bersihkan nama kernel dari spasi untuk tag rilis
+          KNAME_RAW="${{ github.event.inputs.kernel_name }}"
+          [ -z "$KNAME_RAW" ] && KNAME_RAW="Zixine"
+          KNAME=$(echo $KNAME_RAW | tr -d '[:space:]')
           
-          # Tambahkan Varian Matrix ke nama file ZIP
-          VARIANT="${{ matrix.variant }}"
-          ZIP_NAME="RE-GKI-zixine-roki-inline-${VARIANT}-${DATE}.zip"
+          # Nama file ZIP (Disederhanakan tanpa matrix jika tidak dipakai)
+          ZIP_NAME="zixine-inline-6.4-${KNAME}-${DATE}.zip"
           
+          # Persiapan AnyKernel3
           AK3_REPO="https://github.com/zixine/anykernel" 
           git clone -q --depth=1 "$AK3_REPO" -b main anykernel
          
@@ -310,27 +311,36 @@ jobs:
           
           cp "$IMG" anykernel/
           
-          # Set kernel string di anykernel.sh
-          sed -i "s|kernel.string=.*|kernel.string=${FULL_VER} by Zixine|g" anykernel/anykernel.sh
+          # Update string di anykernel.sh
+          sed -i "s|kernel.string=.*|kernel.string=${BASE_VER} by Zixine|g" anykernel/anykernel.sh
           
+          # Pembuatan ZIP
           cd anykernel
-        
           chmod +x anykernel.sh tools/magiskboot tools/ak3-core.sh META-INF/com/google/android/update-binary
           zip -r9 "../$ZIP_NAME" * -x .git .gitignore README.md
           cd ..
           
-          # Release ke Repo Tujuan
-          TARGET_REPO="https://github.com/zixine/Kernel-GKI-12-5.10-release"
+          # --- PROSES RELEASE ---
+          # Gunakan format owner/repo
+          TARGET_REPO="zixine/Kernel-GKI-12-5.10-release"
           RELEASE_TAG="${KNAME}-${DATE}"
           
-          echo "🚀 Attempting to create or upload to release: $RELEASE_TAG"
+          echo "🚀 Mengunggah ke: $TARGET_REPO dengan tag: $RELEASE_TAG"
           
-          if ! gh release create "$RELEASE_TAG" "$ZIP_NAME" --repo "$TARGET_REPO" --title "Zixine ${DATE}" --notes "Automated Matrix Build" --prerelease=false 2>/dev/null; then
-            echo "⚠️ Release creation failed (Release might already exist). Attempting to upload to existing release..."
-            gh release upload "$RELEASE_TAG" "$ZIP_NAME" --repo "$TARGET_REPO" --clobber
+          # Cek apakah rilis sudah ada, jika belum buat baru
+          if ! gh release view "$RELEASE_TAG" --repo "$TARGET_REPO" >/dev/null 2>&1; then
+            echo "Creating new release..."
+            gh release create "$RELEASE_TAG" "$ZIP_NAME" \
+              --repo "$TARGET_REPO" \
+              --title "Zixine Build ${DATE}" \
+              --notes "Automated GKI Build - ${KNAME}" \
+              --prerelease=false
           else
-            echo "✅ Release created and asset uploaded successfully."
+            echo "Release already exists, uploading asset..."
+            gh release upload "$RELEASE_TAG" "$ZIP_NAME" --repo "$TARGET_REPO" --clobber
           fi
+          
+          echo "✅ Selesai!"
           
       - name: Archive Build Log
         if: always()
