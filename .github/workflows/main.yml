@@ -16,14 +16,6 @@ on:
         options:
           - 'RELEASE'
           - 'BETA'         
-      hook_method:
-        description: 'Select Hook Method'
-        required: true
-        type: choice
-        default: 'susfs'
-        options:
-          - 'susfs'
-          - 'kprobes'
       performance_patch:
         description: 'Select Device SoC for Performance Tuning (Internal)'
         required: true
@@ -114,22 +106,20 @@ jobs:
           done
           echo "✅ Existing drivers removed"
           echo "➡️ Menambahkan KernelSU-Next"
-          curl -LSs "https://raw.githubusercontent.com/waheiiiddd-lab/VortexSU/refs/heads/main/kernel/setup.sh" | bash -s main
-          echo "✅ vortexsu added"
-          HOOK_METHOD="${{ github.event.inputs.hook_method }}"
-          if [ "$HOOK_METHOD" = "susfs" ]; then
-            echo "➡️ Cloning susfs4ksu (versi baru)"
+          curl -LSs "https://raw.githubusercontent.com/waheiiiddd-lab/VortexSU/refs/heads/main/kernel/setup.sh" | bash -s main  
+          SUSFS_BRANCH="gki-android12-5.10"
           git clone https://gitlab.com/simonpunk/susfs4ksu/ -b "$SUSFS_BRANCH" sus
           rm -rf sus/.git
           cp -r sus/kernel_patches/fs .
           cp -r sus/kernel_patches/include .
           cp -r sus/kernel_patches/50_add_susfs_in_${SUSFS_BRANCH}.patch .
-          patch -p1 < 50_add_susfs_in_${SUSFS_BRANCH}.patch || true
-    
+          patch -p1 < 50_add_susfs_in_${SUSFS_BRANCH}.patch || true   
           log "Applying Anti-Panic patch for ida_free in namespace.c..."
-          sed -i 's/WARN_ON_ONCE(1);/\/\/WARN_ON_ONCE(1);/g' lib/idr.c 2>/dev/null || true
-          sed -i 's/BUG_ON/WARN_ON/g' fs/namespace.c 2>/dev/null || true
-          sed -i 's/BUILD_WARN_ON/BUILD_BUG_ON/g' fs/namespace.c 2>/dev/null || true
+          sed -i 's/WARN_ON_ONCE(1);///WARN_ON_ONCE(1);/g' lib/idr.c 2>/dev/null || true    
+          SUSFS_VERSION=$(grep -E '^#define SUSFS_VERSION' ./include/linux/susfs.h | cut -d' ' -f3 | sed 's/"//g')
+          config --disable CONFIG_KPM
+          config --enable CONFIG_KSU_MULTI_MANAGER_SUPPORT
+          config --enable CONFIG_KSU_SUSFS
             echo "✅ SUSFS patched"
           else
             echo "➡️ Menggunakan metode Kprobes Hook"
