@@ -163,7 +163,6 @@ jobs:
           CONFIG_KSU_SYSCALL_HOOK=y
           CONFIG_KPROBES=y
           CONFIG_KPROBE_EVENTS=y
-          EOF
           
           # KernelSU Configuration
           CONFIG_KSU=y
