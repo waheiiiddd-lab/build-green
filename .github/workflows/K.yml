@@ -40,19 +40,21 @@ jobs:
         profile: [Universal]
 
     steps:
-      - name: Environment Preparation
-        uses: easimon/maximize-build-space@master
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
         with:
-          root-reserve-mb: 8192
-          swap-size-mb: 10240
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-codeql: 'true'
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
 
-      - name: Fetch Source Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Initialize Git Identity
+      - name: Configure Git
         run: |
           git config --global user.name "zixine"
           git config --global user.email "waheid005@gmail.com"
