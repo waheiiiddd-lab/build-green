@@ -1,0 +1,252 @@
+name: zixine Matrix Builder (Universal VortexSU)
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_name:
+        description: 'Nama Kernel (Opsional)'
+        required: false
+        default: ''
+        type: string
+      release_status:
+        description: 'Status Rilis'
+        required: true
+        type: choice
+        default: 'RELEASE'
+        options:
+          - 'RELEASE'
+          - 'BETA'
+      clang_version:
+        description: 'Versi Compiler Clang'
+        required: true
+        type: choice
+        default: 'r589343 (Clang 21)'
+        options:
+          - 'r536225 (Clang 19)'
+          - 'r547379 (Clang 20)'
+          - 'r589343 (Clang 21)'
+
+permissions:
+  contents: write
+
+jobs:
+  zixine-build:
+    name: Build Universal
+    runs-on: ubuntu-22.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [Universal]
+
+    steps:
+      - name: Environment Preparation
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 8192
+          swap-size-mb: 10240
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-codeql: 'true'
+
+      - name: Fetch Source Code
+        uses: actions/checkout@v4
+
+      - name: Initialize Git Identity
+        run: |
+          git config --global user.name "zixine"
+          git config --global user.email "waheid005@gmail.com"
+
+      - name: Dependency Installation
+        run: |
+          sudo apt update && sudo apt upgrade -y
+          sudo apt install -y git curl repo build-essential bc bison flex libssl-dev \
+            libelf-dev python3 python3-pip unzip zip rsync libncurses-dev lld
+
+      - name: Init & Sync GKI
+        run: |
+          mkdir gki && cd gki
+          repo init -u https://android.googlesource.com/kernel/manifest -b common-android12-5.10 --depth=1
+          repo sync -c --no-tags --no-clone-bundle --optimized-fetch -j$(nproc --all)
+          
+      - name: Update kernel source for GKI 5.10
+        run: |
+          cd gki/common
+          git remote add rama https://github.com/ramabondanp/android_kernel_common-5.10.git
+          git fetch -j12 rama
+          git checkout -b update-android12-5.10-staging rama/android12-5.10-staging
+          rm -rf drivers/staging/kernelsu
+
+      - name: Clean Build Config
+        run: sed -i '2d' gki/common/build.config.gki
+
+      - name: Setup VortexSU & SUSFS (Logic 5.10)
+        working-directory: gki/common
+        run: |
+          # VortexSU Setup
+          curl -LSs "https://raw.githubusercontent.com/waheiiiddd-lab/VortexSU/refs/heads/main/kernel/setup.sh" | bash -s main
+
+          # SUSFS Setup
+          SUSFS_BRANCH="gki-android12-5.10"
+          git clone https://gitlab.com/simonpunk/susfs4ksu/ -b "$SUSFS_BRANCH" sus
+          rm -rf sus/.git
+          cp -r sus/kernel_patches/fs .
+          cp -r sus/kernel_patches/include .
+          cp -r sus/kernel_patches/50_add_susfs_in_${SUSFS_BRANCH}.patch .
+          patch -p1 < 50_add_susfs_in_${SUSFS_BRANCH}.patch || true
+          
+          # Anti-Panic Patch
+          sed -i 's/WARN_ON_ONCE(1);/\/\/WARN_ON_ONCE(1);/g' lib/idr.c 2>/dev/null || true
+
+      - name: Apply Critical Fixes
+        working-directory: gki/common
+        run: |
+          sed -i '/config STACKPROTECTOR_PER_TASK/{n;s/def_bool y/bool "Stack Protector per task"\n\tdefault y/;}' arch/arm64/Kconfig
+          echo "# CONFIG_STACKPROTECTOR_PER_TASK is not set" >> arch/arm64/configs/gki_defconfig
+          sed -i '/pr_warn.*disagrees about version of symbol.*/,+1 s/.*/return 1;/' kernel/module.c
+          if grep -q "drm_atomic_check_valid_clones" drivers/gpu/drm/drm_atomic_helper.c; then
+            sed -i '/^static int drm_atomic_check_valid_clones/,/^}/d' drivers/gpu/drm/drm_atomic_helper.c
+            sed -i '/ret = drm_atomic_check_valid_clones/,/return ret;/d' drivers/gpu/drm/drm_atomic_helper.c
+          fi
+          sed -i 's/check_defconfig//' build.config.gki
+
+      - name: Configure Kernel (Defconfig Injection)
+        working-directory: gki/common
+        run: |
+          TARGET_CONFIG="arch/arm64/configs/gki_defconfig"
+          
+          # --- Root & SUSFS Config (VortexSU Logic) ---
+          cat >> $TARGET_CONFIG <<EOF
+          CONFIG_KSU=y
+          CONFIG_KSU_MULTI_MANAGER_SUPPORT=y
+          CONFIG_KSU_SUSFS=y
+          CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y
+          CONFIG_KSU_SUSFS_SUS_PATH=y
+          CONFIG_KSU_SUSFS_SUS_MOUNT=y
+          CONFIG_KSU_SUSFS_SUS_KSTAT=y
+          CONFIG_KPROBES=y
+          CONFIG_KPROBE_EVENTS=y
+          EOF
+          
+          # --- Re-Injecting Original Logics (Universal) ---
+          cat >> $TARGET_CONFIG <<EOF
+          CONFIG_HZ_300=y
+          CONFIG_CPU_FREQ=y
+          CONFIG_HIGH_RES_TIMERS=y
+          CONFIG_HZ=300
+          CONFIG_TMPFS_XATTR=y
+          CONFIG_TMPFS_POSIX_ACL=y
+          CONFIG_IP_NF_TARGET_TTL=y
+          CONFIG_IP6_NF_TARGET_HL=y
+          CONFIG_IP6_NF_MATCH_HL=y
+          CONFIG_TCP_CONG_ADVANCED=y
+          CONFIG_TCP_CONG_BBR=y
+          CONFIG_NET_SCH_FQ=y
+          CONFIG_TCP_CONG_BIC=n
+          CONFIG_TCP_CONG_WESTWOOD=n
+          CONFIG_TCP_CONG_HTCP=n
+          CONFIG_DEFAULT_BBR=y
+          CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL=y
+          CONFIG_SCHED_TUNE=y
+          CONFIG_MQ_IOSCHED_KYBER=y
+          CONFIG_MQ_IOSCHED_BFQ=y
+          CONFIG_IOSCHED_BFQ=y
+          CONFIG_BFQ_GROUP_IOSCHED=y
+          CONFIG_ZRAM=y
+          CONFIG_ZRAM_WRITEBACK=y
+          EOF
+
+      - name: Apply Versioning
+        working-directory: gki/common
+        run: |
+          echo "" > scripts/setlocalversion
+          chmod +x scripts/setlocalversion
+          NAME_INPUT="${{ github.event.inputs.kernel_name }}"
+          BUILD_TAG=""
+          [ -n "$NAME_INPUT" ] && BUILD_TAG="-$NAME_INPUT"
+          BUILD_TAG="$BUILD_TAG-Vortex-Univ"
+          if grep -q '^EXTRAVERSION *=' Makefile; then
+            sed -i "s/^EXTRAVERSION *=.*/EXTRAVERSION = $BUILD_TAG/" Makefile
+          else
+            echo "EXTRAVERSION = $BUILD_TAG" >> Makefile
+          fi
+
+      - name: Setup Compiler (Clang)
+        working-directory: gki
+        run: |
+          mkdir -p prebuilts-master/clang/host/linux-x86
+          SELECTED_VER="${{ github.event.inputs.clang_version }}"
+          if [ "$SELECTED_VER" == "r536225 (Clang 19)" ]; then
+            TC_TAG="clang-r536225"
+            TC_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main-kernel-2025/clang-r536225.tar.gz"
+          elif [ "$SELECTED_VER" == "r547379 (Clang 20)" ]; then
+            TC_TAG="clang-r547379"
+            TC_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/62cdcefa89e31af2d72c366e8b5ef8db84caea62/clang-r547379.tar.gz"
+          else
+            TC_TAG="clang-r589343"
+            TC_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r589343.tar.gz"
+          fi
+          mkdir -p prebuilts-master/clang/host/linux-x86/$TC_TAG
+          curl -L "$TC_URL" | tar -xz -C prebuilts-master/clang/host/linux-x86/$TC_TAG
+          cd prebuilts-master/clang/host/linux-x86
+          ln -sf "$TC_TAG" clang-r563880b
+
+      - name: Execute Build
+        working-directory: gki
+        run: LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
+
+      - name: Packaging & Release
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          # 1. Menyiapkan Metadata Kernel
+          FULL_VER=$(make -s kernelversion -C gki/common | tr -d '\n\r')
+          DATE=$(date +"%Y%m%d")
+          KNAME="${{ github.event.inputs.kernel_name }}"
+          [ -z "$KNAME" ] && KNAME="Zixine-Vortex"
+          
+          ZIP_NAME="AK3-Vortex-${KNAME}-Univ-${DATE}-${FULL_VER}.zip"
+          
+          # 2. Persiapan AnyKernel3 (Clone clean & siapkan folder)
+          git clone -q --depth=1 "https://github.com/zixine/anykernel" -b main anykernel
+          if [ -f "gki/out/android12-5.10/dist/Image" ]; then
+             cp gki/out/android12-5.10/dist/Image anykernel/
+          else
+             echo "❌ Error: Kernel Image tidak ditemukan!" && exit 1
+          fi
+          
+          # 3. Patch AnyKernel agar siap flash
+          # Menyuntikkan informasi kernel ke string tampilan saat flashing
+          sed -i "s|kernel.string=.*|kernel.string=${KNAME} built for GKI 5.10|g" anykernel/anykernel.sh
+          
+          # 4. ZIP & Permission Finalisasi
+          cd anykernel
+          # Memberikan izin eksekusi pada semua file di tools dan script utama
+          chmod -R 755 .
+          chmod +x anykernel.sh tools/*
+          # Membuat zip tanpa menyertakan metadata git
+          zip -r9 "../$ZIP_NAME" ./* -x .git* README.md
+          cd ..
+          
+          # 5. Upload ke GitHub Release
+          TARGET_REPO="zixine/Kernel-GKI-12-5.10-release"
+          RELEASE_TAG="${KNAME}-${DATE}"
+          
+          if gh release view "$RELEASE_TAG" --repo "$TARGET_REPO" > /dev/null 2>&1; then
+            echo "Release ditemukan, mengupload aset baru..."
+            gh release upload "$RELEASE_TAG" "$ZIP_NAME" --repo "$TARGET_REPO" --clobber
+          else
+            echo "Membuat release baru..."
+            gh release create "$RELEASE_TAG" "$ZIP_NAME" \
+              --repo "$TARGET_REPO" \
+              --title "Release: ${KNAME} [${DATE}]" \
+              --notes "Automated Build: VortexSU + SUSFS on GKI 5.10 (Universal Profile)" \
+              --prerelease=$([ "${{ github.event.inputs.release_status }}" == "BETA" ] && echo "true" || echo "false")
+          fi
+
+      - name: Archive Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-universal
+          path: gki/out/android12-5.10/common/build.log
