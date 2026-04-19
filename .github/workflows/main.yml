@@ -160,17 +160,18 @@ jobs:
       - name: Set version
         working-directory: gki/common
         run: |
+          # Menonaktifkan script default penambahan versi agar tidak ada tanda "+" di akhir versi
           echo "" > scripts/setlocalversion
           chmod +x scripts/setlocalversion
           
           KERNEL_NAME_INPUT="${{ inputs.KERNEL_NAME }}"
 
-          if grep -q '^EXTRAVERSION *=' Makefile; then
-            sed -i "s/^EXTRAVERSION" Makefile
-          else
-            echo "EXTRAVERSION" >> Makefile
-          fi
-
+          # Menghapus baris EXTRAVERSION yang lama jika ada, lalu menambahkannya kembali dengan nama kernelmu
+          sed -i '/^EXTRAVERSION *=/d' Makefile
+          
+          # Menyusun versi: contoh "-Anisphia-KSU"
+          echo "EXTRAVERSION = -${KERNEL_NAME_INPUT}" >> Makefile
+          
       - name: Setup Toolchain
         working-directory: gki
         run: |
