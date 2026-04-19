@@ -176,23 +176,19 @@ jobs:
         working-directory: gki
         run: |
           mkdir -p prebuilts-master/clang/host/linux-x86
-          # Kita gunakan r416183b yang sangat stabil untuk Android 12 GKI
-          CLANG_VER="clang-r416183b"
-          
-          # Link ini mengarah ke file mentah (raw) yang lebih stabil untuk di-curl
-          CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r416183b.tar.gz"
-          
+          CLANG_VER="clang-r547379"
+          CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/62cdcefa89e31af2d72c366e8b5ef8db84caea62/clang-r547379.tar.gz"
+          echo "CLANG_VER=$CLANG_VER" >> $GITHUB_ENV
           mkdir -p prebuilts-master/clang/host/linux-x86/$CLANG_VER
+          cd prebuilts-master/clang/host/linux-x86
+
+          curl -L "${CLANG_URL}" -o clang-temp.tar.gz
+          tar -xzf clang-temp.tar.gz -C $CLANG_VER
           
-          # Menggunakan opsi -k untuk mengabaikan sertifikat jika perlu dan -L untuk mengikuti redirect
-          curl -fSL "${CLANG_URL}" -o clang.tar.gz
+          rm -f clang-temp.tar.gz
           
-          tar -xzf clang.tar.gz -C prebuilts-master/clang/host/linux-x86/$CLANG_VER
-          rm clang.tar.gz
-          
-          # Pastikan folder r563880b (yang dicari script build) mengarah ke r416183b yang asli
-          rm -rf prebuilts-master/clang/host/linux-x86/clang-r563880b
-          ln -sf $CLANG_VER prebuilts-master/clang/host/linux-x86/clang-r563880b
+          rm -rf clang-r563880b
+          ln -sf $CLANG_VER clang-r563880b
       
       - name: Commit changes
         working-directory: gki/common
