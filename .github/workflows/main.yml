@@ -18,7 +18,7 @@ on:
       kernel_name:
         description: 'Kernel Name'
         required: false
-        default: 'Anisphia'
+        default: 'zixine-elysium-inline-3.3'
         type: string
       variant:
         description: 'Variant'
@@ -78,11 +78,11 @@ jobs:
       
       - name: Naga Patch
         run: |
-            cd gki/common
-            TARGET="drivers/cpufreq/qcom-cpufreq-hw.c"
-            SRC_URL="https://raw.githubusercontent.com/Pzqqt/android_kernel_xiaomi_marble/refs/heads/melt-rebase/drivers/cpufreq/qcom-cpufreq-hw.c"
-            curl -L "$SRC_URL" -o /tmp/qcom-cpufreq-hw.c
-            cp /tmp/qcom-cpufreq-hw.c "$TARGET"
+          cd gki/common
+          TARGET="drivers/cpufreq/qcom-cpufreq-hw.c"
+          SRC_URL="https://raw.githubusercontent.com/Pzqqt/android_kernel_xiaomi_marble/refs/heads/melt-rebase/drivers/cpufreq/qcom-cpufreq-hw.c"
+          curl -L "$SRC_URL" -o /tmp/qcom-cpufreq-hw.c
+          cp /tmp/qcom-cpufreq-hw.c "$TARGET"
 
       - name: Setup Variant
         working-directory: gki/common
@@ -146,17 +146,17 @@ jobs:
           CONFIG_NTSYNC=y
           EOF
           
+          # Perbaikan penulisan Kconfig (menghapus awalan CONFIG dan memperbaiki format)
           cat <<EOF >> drivers/cpufreq/Kconfig
-          CONFIG CPU_FREQ_GOV_ZIXINE
-          tristate "'zixine-velocity' CPU freq governor"
-          depends on CPU_FREQ
-          help
-          Zixine Governor is manually created for system optimization.
-          Jika ragu, pilih N.
+          config CPU_FREQ_GOV_ZIXINE
+          	tristate "zixine-velocity CPU freq governor"
+          	depends on CPU_FREQ
+          	help
+          	  Zixine Governor is manually created for system optimization.
+          	  If unsure, say N.
           EOF
           echo "CONFIG_CPU_FREQ_GOV_ZIXINE=y" >> arch/arm64/configs/gki_defconfig
 
-      
       - name: Patch DRM Xiaomi
         working-directory: gki/common
         run: |
@@ -206,7 +206,6 @@ jobs:
 
           curl -L "${CLANG_URL}" -o clang-temp.tar.gz
           tar -xzf clang-temp.tar.gz -C $CLANG_VER
-          
           rm -f clang-temp.tar.gz
           
           rm -rf clang-r563880b
@@ -226,9 +225,7 @@ jobs:
       - name: Package Kernel
         run: |
           mkdir -p artifacts
-
           VERSION=$(make -s kernelversion -C gki/common)
-
           BUILD_DATE=$(date +"%Y%m%d")
           BASE="AK3-${VERSION}-+${BUILD_DATE}"
           echo "BASE=$BASE" >> $GITHUB_ENV
@@ -239,17 +236,15 @@ jobs:
 
           cd anykernel
           zip -r9 "../artifacts/$ZIP_NAME" ./*
-
           cd ..
 
-          # info.txt
           cat <<EOF > artifacts/info.txt
           KERNEL_NAME=$BASE
           KVER=$VERSION
           VARIANT=${{ inputs.VARIANT }}
           DATE=$BUILD_DATE
           EOF
-      
+     
       - name: Upload AnyKernel artifacts
         uses: actions/upload-artifact@v4
         with:
