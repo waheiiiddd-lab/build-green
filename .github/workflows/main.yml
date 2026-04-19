@@ -176,18 +176,22 @@ jobs:
         working-directory: gki
         run: |
           mkdir -p prebuilts-master/clang/host/linux-x86
+          # Kita gunakan r416183b yang sangat stabil untuk Android 12 GKI
           CLANG_VER="clang-r416183b"
           
-          # URL Resmi AOSP untuk r416183b
-          CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master-kernel-build-2022/clang-r416183b.tar.gz"
+          # Link ini mengarah ke file mentah (raw) yang lebih stabil untuk di-curl
+          CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r416183b.tar.gz"
           
           mkdir -p prebuilts-master/clang/host/linux-x86/$CLANG_VER
-          curl -L "${CLANG_URL}" -o clang.tar.gz
+          
+          # Menggunakan opsi -k untuk mengabaikan sertifikat jika perlu dan -L untuk mengikuti redirect
+          curl -fSL "${CLANG_URL}" -o clang.tar.gz
+          
           tar -xzf clang.tar.gz -C prebuilts-master/clang/host/linux-x86/$CLANG_VER
           rm clang.tar.gz
           
-          # Membuat symbolic link agar dikenali oleh script build.sh kamu
-          # Sesuaikan nama folder tujuan (clang-r563880b) dengan apa yang dicari oleh build.sh
+          # Pastikan folder r563880b (yang dicari script build) mengarah ke r416183b yang asli
+          rm -rf prebuilts-master/clang/host/linux-x86/clang-r563880b
           ln -sf $CLANG_VER prebuilts-master/clang/host/linux-x86/clang-r563880b
       
       - name: Commit changes
