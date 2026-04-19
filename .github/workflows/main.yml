@@ -199,7 +199,7 @@ jobs:
         run: |
           mkdir -p prebuilts-master/clang/host/linux-x86
           CLANG_VER="clang-r547379"
-          CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/62cdcefa89e31af2d72c366e8b5ef8db84caea62/clang-r547379.tar.gz"
+          CLANG_URL="CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r547379.tar.gz""
           echo "CLANG_VER=$CLANG_VER" >> $GITHUB_ENV
           mkdir -p prebuilts-master/clang/host/linux-x86/$CLANG_VER
           cd prebuilts-master/clang/host/linux-x86
