@@ -129,7 +129,7 @@ jobs:
           else
             echo "ENABLE_SUSFS=false" >> $GITHUB_ENV
           fi
-          
+
           sed -i '/CONFIG_HZ=/d' $DEFCONFIG
           cat <<EOF >> $DEFCONFIG
           CONFIG_HZ=$(echo "${{ inputs.SCHED_HZ }}" | sed 's/HZ//')
@@ -145,17 +145,6 @@ jobs:
           CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL=y
           CONFIG_NTSYNC=y
           EOF
-          
-          # Perbaikan penulisan Kconfig (menghapus awalan CONFIG dan memperbaiki format)
-          cat <<EOF >> drivers/cpufreq/Kconfig
-          config CPU_FREQ_GOV_ZIXINE
-          	tristate "zixine-velocity CPU freq governor"
-          	depends on CPU_FREQ
-          	help
-          	  Zixine Governor is manually created for system optimization.
-          	  If unsure, say N.
-          EOF
-          echo "CONFIG_CPU_FREQ_GOV_ZIXINE=y" >> arch/arm64/configs/gki_defconfig
 
       - name: Patch DRM Xiaomi
         working-directory: gki/common
@@ -175,23 +164,11 @@ jobs:
           chmod +x scripts/setlocalversion
           
           KERNEL_NAME_INPUT="${{ inputs.KERNEL_NAME }}"
-          VARIANT="${{ inputs.VARIANT }}"
-          SUFFIX=""
-          if [ -n "$KERNEL_NAME_INPUT" ]; then
-            SUFFIX="-$KERNEL_NAME_INPUT"
-          fi
-          if [ "$VARIANT" == "KSU" ]; then
-            SUFFIX="$SUFFIX-KSU"
-          elif [ "$VARIANT" == "KSUS" ]; then
-            SUFFIX="$SUFFIX-KSUS"
-          elif [ "$VARIANT" == "VNL" ]; then
-            SUFFIX="$SUFFIX-VNL"
-          fi
 
           if grep -q '^EXTRAVERSION *=' Makefile; then
-            sed -i "s/^EXTRAVERSION *=.*/EXTRAVERSION = $SUFFIX/" Makefile
+            sed -i "s/^EXTRAVERSION" Makefile
           else
-            echo "EXTRAVERSION = $SUFFIX" >> Makefile
+            echo "EXTRAVERSION" >> Makefile
           fi
 
       - name: Setup Toolchain
