@@ -162,12 +162,6 @@ jobs:
           rm -rf clang-r563880b
           ln -sf $CLANG_VER clang-r563880b
 
-      - name: Setup ccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ${{ runner.os }}-kernel-${{ inputs.VARIANT }}
-          max-size: 2G  # Ukuran cache (2GB cukup untuk kernel GKI)
-      
       - name: Commit changes
         working-directory: gki/common
         run: |
@@ -177,15 +171,8 @@ jobs:
       - name: Compile
         working-directory: gki
         run: |
-          # Beritahu sistem untuk menggunakan ccache
-          export PATH="/usr/lib/ccache:$PATH"
-          export CCACHE_DIR="${{ github.workspace }}/.ccache"
-          export USE_CCACHE=1
-          
           # Gunakan semua core yang tersedia agar lebih cepat
-          LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh -j$(nproc --all) \
-          CC="ccache clang" \
-          CXX="ccache clang++"
+          LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh -j$(nproc --all)
 
       - name: Package Kernel
         run: |
