@@ -72,7 +72,7 @@ jobs:
         run: |
           cd gki/common
           git remote add waheiiiddd-lab https://github.com/waheiiiddd-lab/android_kernel_common-5.10.git
-          git fetch -j12 Anisphia
+          git fetch -j12 waheiiiddd-lab
           git checkout -b update-lts waheiiiddd-lab/lts
           rm -rf drivers/staging/kernelsu
       
