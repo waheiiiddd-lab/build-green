@@ -18,7 +18,7 @@ on:
       kernel_name:
         description: 'Kernel Name'
         required: false
-        default: 'Anisphia'
+        default: 'zixine-elysium-inline-3.3'
         type: string
       variant:
         description: 'Variant'
@@ -29,18 +29,6 @@ on:
           - 'KSU'
           - 'KSUS'
           - 'VNL'
-      scheduler_hz:
-        description: 'Kernel tickrates'
-        required: true
-        type: choice
-        default: '250HZ'
-        options:
-          - '100HZ'
-          - '250HZ'
-          - '300HZ'
-          - '500HZ'
-          - '750HZ'
-          - '1000HZ'
 
 permissions:
   contents: write
@@ -129,21 +117,6 @@ jobs:
           else
             echo "ENABLE_SUSFS=false" >> $GITHUB_ENV
           fi
-
-          sed -i '/CONFIG_HZ=/d' $DEFCONFIG
-          cat <<EOF >> $DEFCONFIG
-          CONFIG_HZ=$(echo "${{ inputs.SCHED_HZ }}" | sed 's/HZ//')
-          CONFIG_EXT4_FS=y
-          CONFIG_EXT4_FS_POSIX_ACL=y
-          CONFIG_EXT4_FS_SECURITY=y
-          CONFIG_ZRAM=y
-          CONFIG_DEFAULT_BBRPLUS=y
-          CONFIG_DEFAULT_TCP_CONG="bbrplus"
-          CONFIG_TMPFS_POSIX_ACL=y
-          CONFIG_IP6_NF_TARGET_HL=y
-          CONFIG_IP6_NF_MATCH_HL=y
-          CONFIG_NTSYNC=y
-          EOF
 
       - name: Patch DRM Xiaomi
         working-directory: gki/common
