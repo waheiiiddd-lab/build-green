@@ -20,15 +20,6 @@ on:
         required: false
         default: 'zixine-elysium-inline-3.5'
         type: string
-      variant:
-        description: 'Variant'
-        required: true
-        type: choice
-        default: 'KSU'
-        options:
-          - 'KSU'
-          - 'KSUS'
-          - 'VNL'
       scheduler_hz:
         description: 'Kernel tickrates'
         required: true
@@ -87,23 +78,7 @@ jobs:
       - name: Setup Variant
         working-directory: gki/common
         run: |
-          DEFCONFIG="arch/arm64/configs/gki_defconfig"
-          VARIANT="${{ inputs.VARIANT }}"
-          
-          sed -i '/CONFIG_KSU/d' $DEFCONFIG
-          sed -i '/CONFIG_KSU_SUSFS/d' $DEFCONFIG
-
-          if [ "$VARIANT" == "KSU" ]; then
-            curl -LSs "https://raw.githubusercontent.com/pershoot/kernelSU-Next/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
-            echo "CONFIG_KSU=y" >> $DEFCONFIG
-            echo "# CONFIG_KSU_SUSFS is not set" >> $DEFCONFIG
-            echo "ENABLE_SUSFS=false" >> $GITHUB_ENV
-            
-            echo "Patch All Managers Support..."
-            curl -LSs "https://raw.githubusercontent.com/Kingfinik98/gki-builder/refs/heads/6.x/kernel-patches/ksu/ksun-add-more-managers-support.patch" -o /tmp/ksun-add-more-managers-support.patch
-            cd KernelSU-Next && patch -p1 < /tmp/ksun-add-more-managers-support.patch && cd ..
-
-          elif [ "$VARIANT" == "KSUS" ]; then
+          DEFCONFIG="arch/arm64/configs/gki_defconfig
             curl -LSs "https://raw.githubusercontent.com/RapliVx/KernelSU/refs/heads/master/kernel/setup.sh" | bash -s susfs-mambo-master
             git clone https://gitlab.com/simonpunk/susfs4ksu/ -b gki-android12-5.10 sus
             rm -rf sus/.git
@@ -111,15 +86,14 @@ jobs:
             cp -r $susfs/fs . && cp -r $susfs/include .
             cp -r $susfs/50_add_susfs_in_gki-android12-5.10.patch .
             patch -p1 < 50_add_susfs_in_gki-android12-5.10.patch
-
             echo "CONFIG_KSU=y" >> $DEFCONFIG
             echo "CONFIG_KSU_SUSFS=y" >> $DEFCONFIG
-
-          sed -i '/CONFIG_HZ=/d' $DEFCONFIG
-          cat <<EOF >> $DEFCONFIG
-          CONFIG_HZ=$(echo "${{ inputs.SCHED_HZ }}" | sed 's/HZ//')
-          EOF
-      
+            
+            sed -i '/CONFIG_HZ=/d' $DEFCONFIG
+            cat <<EOF >> $DEFCONFIG
+            CONFIG_HZ=$(echo "${{ inputs.SCHED_HZ }}" | sed 's/HZ//')
+            EOF
+ 
       - name: Patch DRM Xiaomi
         working-directory: gki/common
         run: |
