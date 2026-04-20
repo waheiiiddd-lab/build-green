@@ -16,9 +16,9 @@ on:
   workflow_dispatch:
     inputs:
       kernel_name:
-        description: 'Kernel Name'
+        description: 'zixine-elysium-inline-3.5'
         required: false
-        default: 'zixine-elysium-inline-3.3'
+        default: 'Anisphia'
         type: string
       variant:
         description: 'Variant'
@@ -29,6 +29,18 @@ on:
           - 'KSU'
           - 'KSUS'
           - 'VNL'
+      scheduler_hz:
+        description: 'Kernel tickrates'
+        required: true
+        type: choice
+        default: '300HZ'
+        options:
+          - '100HZ'
+          - '250HZ'
+          - '300HZ'
+          - '500HZ'
+          - '750HZ'
+          - '1000HZ'
 
 permissions:
   contents: write
@@ -44,8 +56,8 @@ jobs:
 
       - name: Configure Git
         run: |
-          git config --global user.name "rinnsakaguchi"
-          git config --global user.email "ffrizz042@gmail.com"
+          git config --global user.name "zixine"
+          git config --global user.email "waheiiiddd@gmail.com"
 
       - name: Install build tools
         run: sudo apt install -y git curl bc bison flex unzip zip repo rsync aria2 wget
@@ -59,7 +71,7 @@ jobs:
       - name: Setup Kernel Source
         run: |
           cd gki/common
-          git remote add waheiiiddd-lab https://github.com/waheiiiddd-lab/android_kernel_common-5.10.git
+          git remote add zixine https://github.com/waheiiiddd-lab/Kolor-ijo.git
           git fetch -j12 waheiiiddd-lab
           git checkout -b update-lts waheiiiddd-lab/lts
           rm -rf drivers/staging/kernelsu
@@ -117,7 +129,12 @@ jobs:
           else
             echo "ENABLE_SUSFS=false" >> $GITHUB_ENV
           fi
-
+          
+          sed -i '/CONFIG_HZ=/d' $DEFCONFIG
+          cat <<EOF >> $DEFCONFIG
+          CONFIG_HZ=$(echo "${{ inputs.SCHED_HZ }}" | sed 's/HZ//')
+          EOF
+      
       - name: Patch DRM Xiaomi
         working-directory: gki/common
         run: |
@@ -132,18 +149,29 @@ jobs:
       - name: Set version
         working-directory: gki/common
         run: |
-          # Menonaktifkan script default penambahan versi agar tidak ada tanda "+" di akhir versi
           echo "" > scripts/setlocalversion
           chmod +x scripts/setlocalversion
           
           KERNEL_NAME_INPUT="${{ inputs.KERNEL_NAME }}"
+          VARIANT="${{ inputs.VARIANT }}"
+          SUFFIX=""
+          if [ -n "$KERNEL_NAME_INPUT" ]; then
+            SUFFIX="-$KERNEL_NAME_INPUT"
+          fi
+          if [ "$VARIANT" == "KSU" ]; then
+            SUFFIX="$SUFFIX-KSU"
+          elif [ "$VARIANT" == "KSUS" ]; then
+            SUFFIX="$SUFFIX-KSUS"
+          elif [ "$VARIANT" == "VNL" ]; then
+            SUFFIX="$SUFFIX-VNL"
+          fi
 
-          # Menghapus baris EXTRAVERSION yang lama jika ada, lalu menambahkannya kembali dengan nama kernelmu
-          sed -i '/^EXTRAVERSION *=/d' Makefile
-          
-          # Menyusun versi: contoh "-Anisphia-KSU"
-          echo "EXTRAVERSION = -${KERNEL_NAME_INPUT}" >> Makefile
-          
+          if grep -q '^EXTRAVERSION *=' Makefile; then
+            sed -i "s/^EXTRAVERSION *=.*/EXTRAVERSION = $SUFFIX/" Makefile
+          else
+            echo "EXTRAVERSION = $SUFFIX" >> Makefile
+          fi
+
       - name: Setup Toolchain
         working-directory: gki
         run: |
@@ -161,7 +189,7 @@ jobs:
           
           rm -rf clang-r563880b
           ln -sf $CLANG_VER clang-r563880b
-
+      
       - name: Commit changes
         working-directory: gki/common
         run: |
@@ -171,7 +199,6 @@ jobs:
       - name: Compile
         working-directory: gki
         run: |
-          # Gunakan semua core yang tersedia agar lebih cepat
           LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh -j$(nproc --all)
 
       - name: Package Kernel
@@ -185,7 +212,7 @@ jobs:
           echo "BASE=$BASE" >> $GITHUB_ENV
           ZIP_NAME="${BASE}.zip"
 
-          git clone -q --depth=1 https://github.com/waheiiiddd-lab/anykernel3 anykernel
+          git clone -q --depth=1 https://github.com/waheiiiddd-lab/anykernel3
           cp gki/out/android12-5.10/dist/Image anykernel/
 
           cd anykernel
