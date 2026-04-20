@@ -62,9 +62,15 @@ jobs:
       - name: Setup Kernel Source
         run: |
           cd gki/common
+          # Tambahkan repo kamu sebagai remote
           git remote add waheiiiddd-lab https://github.com/waheiiiddd-lab/Kolor-ijo.git
-          git fetch -j12 waheiiiddd-lab
-          git checkout -b update-lts waheiiiddd-lab/lts
+          git fetch waheiiiddd-lab lts
+          
+          # JANGAN checkout branch-nya, tapi AMBIL file-nya saja (Checkout files)
+          # Ini akan menimpa drivers/ dsb tanpa menghapus folder security/
+          git checkout waheiiiddd-lab/lts -- .
+          
+          # Baru setelah itu hapus KernelSU bawaan jika perlu
           rm -rf drivers/staging/kernelsu
       
       - name: Naga Patch
