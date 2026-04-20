@@ -130,12 +130,11 @@ jobs:
             echo "ENABLE_SUSFS=false" >> $GITHUB_ENV
           fi
 
-          # Patch include path menggunakan subdir-ccflags-y agar turun ke seluruh anak folder KernelSU
-          if [ -f "drivers/kernelsu/Makefile" ]; then
-            sed -i '1i ccflags-y += -I$(objtree)/security/selinux/include -I$(srctree)/security/selinux/include' drivers/kernelsu/Makefile
-            sed -i '1i subdir-ccflags-y += -I$(objtree)/security/selinux/include -I$(srctree)/security/selinux/include' drivers/kernelsu/Makefile
+          if [ -f "drivers/kernelsu/Makefile" ]; then     
+          sed -i '1i ccflags-y += -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include' drivers/kernelsu/Makefile
+          sed -i '1i ccflags-y += -I$(objtree)/security/selinux/include' drivers/kernelsu/Makefile
           fi
-          
+
           sed -i '/CONFIG_HZ=/d' $DEFCONFIG
           cat <<EOF >> $DEFCONFIG
           CONFIG_HZ=$(echo "${{ inputs.SCHED_HZ }}" | sed 's/HZ//')
@@ -167,7 +166,7 @@ jobs:
           if [ "$VARIANT" == "KSU" ]; then
             SUFFIX="$SUFFIX-KSU"
           elif [ "$VARIANT" == "KSUS" ]; then
-            SUFFIX="$SUFFIX-KSUS"
+            SUFFIX="$SUFFIX-velocity"
           elif [ "$VARIANT" == "VNL" ]; then
             SUFFIX="$SUFFIX-VNL"
           fi
