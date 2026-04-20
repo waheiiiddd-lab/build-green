@@ -130,10 +130,10 @@ jobs:
             echo "ENABLE_SUSFS=false" >> $GITHUB_ENV
           fi
 
-          # Patch include path untuk KernelSU agar mendeteksi flask.h di output directory
+          # Patch include path menggunakan subdir-ccflags-y agar turun ke seluruh anak folder KernelSU
           if [ -f "drivers/kernelsu/Makefile" ]; then
-            echo "ccflags-y += -I\$(objtree)/security/selinux/include" >> drivers/kernelsu/Makefile
-            echo "ccflags-y += -I\$(srctree)/security/selinux/include" >> drivers/kernelsu/Makefile
+            sed -i '1i ccflags-y += -I$(objtree)/security/selinux/include -I$(srctree)/security/selinux/include' drivers/kernelsu/Makefile
+            sed -i '1i subdir-ccflags-y += -I$(objtree)/security/selinux/include -I$(srctree)/security/selinux/include' drivers/kernelsu/Makefile
           fi
           
           sed -i '/CONFIG_HZ=/d' $DEFCONFIG
