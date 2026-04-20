@@ -129,6 +129,12 @@ jobs:
           else
             echo "ENABLE_SUSFS=false" >> $GITHUB_ENV
           fi
+
+          # Patch include path untuk KernelSU agar mendeteksi flask.h di output directory
+          if [ -f "drivers/kernelsu/Makefile" ]; then
+            echo "ccflags-y += -I\$(objtree)/security/selinux/include" >> drivers/kernelsu/Makefile
+            echo "ccflags-y += -I\$(srctree)/security/selinux/include" >> drivers/kernelsu/Makefile
+          fi
           
           sed -i '/CONFIG_HZ=/d' $DEFCONFIG
           cat <<EOF >> $DEFCONFIG
