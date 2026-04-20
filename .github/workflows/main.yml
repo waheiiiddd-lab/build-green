@@ -98,10 +98,16 @@ jobs:
           echo "CONFIG_KSU=y" >> $DEFCONFIG
           echo "CONFIG_KSU_SUSFS=y" >> $DEFCONFIG
           
-          sed -i '/CONFIG_HZ=/d' $DEFCONFIG
-          # Extract numerical value from SCHED_HZ input
-          HZ_VAL=$(echo "${{ inputs.SCHED_HZ }}" | sed 's/HZ//')
-          echo "CONFIG_HZ=$HZ_VAL" >> $DEFCONFIG
+          # Tambahkan ini untuk memaksa compiler menemukan flask.h
+          if [ -f "security/selinux/include/objsec.h" ]; then
+            sed -i 's/#include "flask.h"/#include <security\/selinux\/include\/flask.h>/g' security/selinux/include/objsec.h
+            sed -i 's/#include "avc_ss.h"/#include <security\/selinux\/include\/avc_ss.h>/g' security/selinux/include/objsec.h
+          fi
+
+          # Pastikan flags include masuk ke Makefile KernelSU
+          if [ -d "drivers/kernelsu" ]; then
+            echo "ccflags-y += -I\$(srctree)/security/selinux -I\$(srctree)/security/selinux/include -I\$(objtree)/security/selinux/include" >> drivers/kernelsu/Makefile
+          fi
  
       - name: Patch DRM Xiaomi
         working-directory: gki/common
