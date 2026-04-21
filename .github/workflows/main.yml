@@ -55,7 +55,7 @@ jobs:
           # Baru setelah itu hapus KernelSU bawaan jika perlu
           rm -rf drivers/staging/kernelsu
 
-      - name: Setup Variant
+      - name: Setup ksu
         working-directory: gki/common
         run: |
           DEFCONFIG="arch/arm64/configs/gki_defconfig"
@@ -156,25 +156,11 @@ jobs:
         run: |
           echo "" > scripts/setlocalversion
           chmod +x scripts/setlocalversion
-          
-          KERNEL_NAME_INPUT="${{ inputs.KERNEL_NAME }}"
-          VARIANT="${{ inputs.VARIANT }}"
-          SUFFIX=""
-          if [ -n "$KERNEL_NAME_INPUT" ]; then
-            SUFFIX="-$KERNEL_NAME_INPUT"
-          fi
-          if [ "$VARIANT" == "KSU" ]; then
-            SUFFIX="$SUFFIX-KSU"
-          elif [ "$VARIANT" == "KSUS" ]; then
-            SUFFIX="$SUFFIX-velocity"
-          elif [ "$VARIANT" == "VNL" ]; then
-            SUFFIX="$SUFFIX-VNL"
-          fi
 
           if grep -q '^EXTRAVERSION *=' Makefile; then
-            sed -i "s/^EXTRAVERSION *=.*/EXTRAVERSION = $SUFFIX/" Makefile
+            sed -i "s/^EXTRAVERSION *=.*/EXTRAVERSION/" Makefile
           else
-            echo "EXTRAVERSION = $SUFFIX" >> Makefile
+            echo "EXTRAVERSION" >> Makefile
           fi
 
       - name: Setup Toolchain
@@ -230,7 +216,6 @@ jobs:
           cat <<EOF > artifacts/info.txt
           KERNEL_NAME=$BASE
           KVER=$VERSION
-          VARIANT=${{ inputs.VARIANT }}
           DATE=$BUILD_DATE
           EOF
       
