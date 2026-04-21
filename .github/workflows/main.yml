@@ -6,21 +6,48 @@ on:
       KERNEL_NAME:
         type: string
         required: true
+      VARIANT:
+        type: string
+        required: true
+      SCHED_HZ:
+        type: string
+        required: true
 
   workflow_dispatch:
     inputs:
       kernel_name:
-        description: 'gasak-mbud'
+        description: 'Kernel Name'
         required: false
         default: 'zixine-elysium-inline-3.5'
         type: string
+      variant:
+        description: 'Variant'
+        required: true
+        type: choice
+        default: 'KSU'
+        options:
+          - 'KSU'
+          - 'KSUS'
+          - 'VNL'
+      scheduler_hz:
+        description: 'Kernel tickrates'
+        required: true
+        type: choice
+        default: '250HZ'
+        options:
+          - '100HZ'
+          - '250HZ'
+          - '300HZ'
+          - '500HZ'
+          - '750HZ'
+          - '1000HZ'
 
 permissions:
   contents: write
 
 jobs:
   build:
-    name: build zixine
+    name: Build ${{ inputs.KERNEL_NAME }}-${{ inputs.VARIANT }}
     runs-on: ubuntu-22.04
 
     steps:
@@ -44,15 +71,39 @@ jobs:
       - name: Setup Kernel Source
         run: |
           cd gki/common
-          git remote add waheiiiddd-lab https://github.com/waheiiiddd-lab/Kolor-ijo.git
+          git remote add waheiiiddd-lab https://github.com/waheiiiddd-lab/android_kernel_common-5.10.git
           git fetch -j12 waheiiiddd-lab
           git checkout -b update-lts waheiiiddd-lab/lts
           rm -rf drivers/staging/kernelsu
+      
+      - name: Naga Patch
+        run: |
+            cd gki/common
+            TARGET="drivers/cpufreq/qcom-cpufreq-hw.c"
+            SRC_URL="https://raw.githubusercontent.com/Pzqqt/android_kernel_xiaomi_marble/refs/heads/melt-rebase/drivers/cpufreq/qcom-cpufreq-hw.c"
+            curl -L "$SRC_URL" -o /tmp/qcom-cpufreq-hw.c
+            cp /tmp/qcom-cpufreq-hw.c "$TARGET"
 
-      - name: Setup ksu
+      - name: Setup Variant
         working-directory: gki/common
         run: |
           DEFCONFIG="arch/arm64/configs/gki_defconfig"
+          VARIANT="${{ inputs.VARIANT }}"
+          
+          sed -i '/CONFIG_KSU/d' $DEFCONFIG
+          sed -i '/CONFIG_KSU_SUSFS/d' $DEFCONFIG
+
+          if [ "$VARIANT" == "KSU" ]; then
+            curl -LSs "https://raw.githubusercontent.com/pershoot/kernelSU-Next/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
+            echo "CONFIG_KSU=y" >> $DEFCONFIG
+            echo "# CONFIG_KSU_SUSFS is not set" >> $DEFCONFIG
+            echo "ENABLE_SUSFS=false" >> $GITHUB_ENV
+            
+            echo "Patch All Managers Support..."
+            curl -LSs "https://raw.githubusercontent.com/Kingfinik98/gki-builder/refs/heads/6.x/kernel-patches/ksu/ksun-add-more-managers-support.patch" -o /tmp/ksun-add-more-managers-support.patch
+            cd KernelSU-Next && patch -p1 < /tmp/ksun-add-more-managers-support.patch && cd ..
+
+          elif [ "$VARIANT" == "KSUS" ]; then
             curl -LSs "https://raw.githubusercontent.com/pershoot/kernelSU-Next/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
             git clone https://gitlab.com/simonpunk/susfs4ksu/ -b gki-android12-5.10 sus
             rm -rf sus/.git
@@ -60,80 +111,41 @@ jobs:
             cp -r $susfs/fs . && cp -r $susfs/include .
             cp -r $susfs/50_add_susfs_in_gki-android12-5.10.patch .
             patch -p1 < 50_add_susfs_in_gki-android12-5.10.patch
-            
+
+            echo "CONFIG_KSU=y" >> $DEFCONFIG
+            echo "CONFIG_KSU_SUSFS=y" >> $DEFCONFIG
             if [ -f "drivers/kernelsu/supercalls.c" ]; then
               sed -i 's/#ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME/#if 0 \/\* CONFIG_KSU_SUSFS_SPOOF_UNAME Disabled to fix build \*\//' drivers/kernelsu/supercalls.c || true
               echo "SUSFS symbol fix applied for KernelSU-Next."
             else
               echo "Skipping obsolete SUSFS uname fix."
             fi
+            echo "ENABLE_SUSFS=true" >> $GITHUB_ENV
             
             echo "Patch All Managers Support..."
             curl -LSs "https://raw.githubusercontent.com/Kingfinik98/gki-builder/refs/heads/6.x/kernel-patches/ksu/ksun-add-more-managers-support.patch" -o /tmp/ksun-add-more-managers-support.patch
             cd KernelSU-Next && patch -p1 < /tmp/ksun-add-more-managers-support.patch && cd ..
 
-      - name: Remove check_defconfig
-        run: |
-          sed -i 's/check_defconfig//' gki/common/build.config.gki
-            
-      - name: Remove check_defconfig & Update Defconfig
-        working-directory: gki/common
-        run: |
-          DEFCONFIG="arch/arm64/configs/gki_defconfig" 
-          echo "⚙️ Added KSU & SuSFS configuration"
-          cat >> $DEFCONFIG <<EOF
-          CONFIG_KSU=y
-          CONFIG_KPM=n
-          CONFIG_KPROBES=y
-          CONFIG_KPROBE_EVENTS=y
-          EOF
-          echo "🔧 Mode: SuSFS Hook Enabled"
-          cat >> $DEFCONFIG <<EOF
-          CONFIG_KSU_SUSFS=y
-          CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y
-          CONFIG_KSU_SUSFS_SUS_PATH=y
-          CONFIG_KSU_SUSFS_SUS_MOUNT=y
-          CONFIG_KSU_SUSFS_SUS_KSTAT_SPOOF_GENERIC=y
-          CONFIG_KSU_SUSFS_SUS_KSTAT=y
-          CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y
-          CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y
-          CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSTAT=y
-          CONFIG_KSU_SUSFS_SUS_OVERLAYFS=n
-          CONFIG_KSU_SUSFS_TRY_UMOUNT=n
-          CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=n
-          CONFIG_KSU_SUSFS_SPOOF_UNAME=y
-          CONFIG_KSU_SUSFS_ENABLE_LOG=y
-          CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
-          CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
-          CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
-          CONFIG_KSU_MANUAL_HOOK=n
-          CONFIG_KSU_HAS_MANUAL_HOOK=n
-          EOF
+          else
+            echo "ENABLE_SUSFS=false" >> $GITHUB_ENV
+          fi
           
-          echo "⚙️ Adding Universal Performance Tuning"
-          cat >> $DEFCONFIG <<EOF
-          CONFIG_IP_NF_TARGET_TTL=y
-          CONFIG_TCP_CONG_ADVANCED=y
-          CONFIG_TCP_CONG_WESTWOOD=y
-          # CONFIG_TCP_CONG_BBR is not set
-          CONFIG_DEFAULT_WESTWOOD=y
-          CONFIG_NET_SCH_FQ=y
-          # CONFIG_IOSCHED_BFQ is not set
-          # CONFIG_BFQ_GROUP_IOSCHED is not set
-          CONFIG_DEFAULT_ADIOS=y
-          CONFIG_MQ_IOSCHED_ADIOS=y
-          CONFIG_DEFAULT_ADIOS=y
-          CONFIG_MQ_DEADLINE=y
-          CONFIG_DEFAULT_MQ_DEADLINE=y
-          # CONFIG_DEFAULT_FQ_CODEL is not set
-          CONFIG_HZ_300=y
-          CONFIG_HZ=300
-          CONFIG_CPU_FREQ=y
-          CONFIG_SWAP=y
-          CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
-          CONFIG_CPU_FREQ_GOV_ONDEMAND=y
+          sed -i '/CONFIG_HZ=/d' $DEFCONFIG
+          cat <<EOF >> $DEFCONFIG
+          CONFIG_HZ=$(echo "${{ inputs.SCHED_HZ }}" | sed 's/HZ//')
+          CONFIG_EXT4_FS=y
+          CONFIG_EXT4_FS_POSIX_ACL=y
+          CONFIG_EXT4_FS_SECURITY=y
+          CONFIG_ZRAM=y
+          CONFIG_DEFAULT_BBR=y
+          CONFIG_DEFAULT_TCP_CONG="bbr"
+          CONFIG_TMPFS_POSIX_ACL=y
+          CONFIG_IP6_NF_TARGET_HL=y
+          CONFIG_IP6_NF_MATCH_HL=y
+          CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL=y
+          CONFIG_NTSYNC=y
           EOF
-
+      
       - name: Patch DRM Xiaomi
         working-directory: gki/common
         run: |
@@ -141,29 +153,36 @@ jobs:
           sed -i '/^static int drm_atomic_check_valid_clones/,/^}/d' drivers/gpu/drm/drm_atomic_helper.c
           sed -i '/ret = drm_atomic_check_valid_clones/,/return ret;/d' drivers/gpu/drm/drm_atomic_helper.c
       
+      - name: Remove check_defconfig
+        run: |
+          sed -i 's/check_defconfig//' gki/common/build.config.gki
+      
       - name: Set version
         working-directory: gki/common
         run: |
-          # 1. Netralkan scripts/setlocalversion agar tidak menambah tanda '+' atau 'dirty'
-          echo "#!/bin/sh" > scripts/setlocalversion
-          echo "exit 0" >> scripts/setlocalversion
+          echo "" > scripts/setlocalversion
           chmod +x scripts/setlocalversion
-
-          # 2. Definisikan nama kernel Anda di sini (misal: -zixine)
-          KNAME="zixine-elysium-inline-3.5"
-
-          # 3. Update EXTRAVERSION di Makefile dengan benar
-          # Mencari baris yang dimulai dengan EXTRAVERSION dan menggantinya secara total
-          if grep -q '^EXTRAVERSION' Makefile; then
-            sed -i "s/^EXTRAVERSION.*/EXTRAVERSION = $KNAME/" Makefile
-          else
-            # Jika tidak ada (jarang terjadi), tambahkan di bagian atas setelah VERSION/PATCHLEVEL
-            sed -i "4i EXTRAVERSION = $KNAME" Makefile
+          
+          KERNEL_NAME_INPUT="${{ inputs.KERNEL_NAME }}"
+          VARIANT="${{ inputs.VARIANT }}"
+          SUFFIX=""
+          if [ -n "$KERNEL_NAME_INPUT" ]; then
+            SUFFIX="-$KERNEL_NAME_INPUT"
           fi
-          
-          echo "Kernel version set to: $(make -s kernelversion)"
+          if [ "$VARIANT" == "KSU" ]; then
+            SUFFIX="$SUFFIX-KSU"
+          elif [ "$VARIANT" == "KSUS" ]; then
+            SUFFIX="$SUFFIX-velocity"
+          elif [ "$VARIANT" == "VNL" ]; then
+            SUFFIX="$SUFFIX-VNL"
+          fi
 
-          
+          if grep -q '^EXTRAVERSION *=' Makefile; then
+            sed -i "s/^EXTRAVERSION *=.*/EXTRAVERSION = $SUFFIX/" Makefile
+          else
+            echo "EXTRAVERSION = $SUFFIX" >> Makefile
+          fi
+
       - name: Setup Toolchain
         working-directory: gki
         run: |
@@ -191,7 +210,6 @@ jobs:
       - name: Compile
         working-directory: gki
         run: |
-          KBUILD_BUILD_USER="zixine" KBUILD_BUILD_HOST="aitt"
           LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh -j$(nproc --all)
 
       - name: Package Kernel
@@ -205,7 +223,7 @@ jobs:
           echo "BASE=$BASE" >> $GITHUB_ENV
           ZIP_NAME="${BASE}.zip"
 
-          git clone -q --depth=1 https://github.com/waheiiiddd-lab/anykernel3
+          git clone -q --depth=1 https://github.com/waheiiiddd-lab/AnyKernel345
           cp gki/out/android12-5.10/dist/Image anykernel/
 
           cd anykernel
@@ -217,6 +235,7 @@ jobs:
           cat <<EOF > artifacts/info.txt
           KERNEL_NAME=$BASE
           KVER=$VERSION
+          VARIANT=${{ inputs.VARIANT }}
           DATE=$BUILD_DATE
           EOF
       
