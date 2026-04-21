@@ -132,9 +132,10 @@ jobs:
             
 
       - name: Remove check_defconfig
-         DEFCONFIG="arch/arm64/configs/gki_defconfig" 
         run: |
           sed -i 's/check_defconfig//' gki/common/build.config.gki
+          
+          DEFCONFIG="arch/arm64/configs/gki_defconfig" 
           echo "⚙️ Added KSU & SuSFS configuration"
           cat >> $DEFCONFIG <<EOF
           CONFIG_KSU=y
