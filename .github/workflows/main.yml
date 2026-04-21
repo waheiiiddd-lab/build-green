@@ -71,12 +71,14 @@ jobs:
             echo "Patch All Managers Support..."
             curl -LSs "https://raw.githubusercontent.com/Kingfinik98/gki-builder/refs/heads/6.x/kernel-patches/ksu/ksun-add-more-managers-support.patch" -o /tmp/ksun-add-more-managers-support.patch
             cd KernelSU-Next && patch -p1 < /tmp/ksun-add-more-managers-support.patch && cd ..
-            
 
+      - name: Remove check_defconfig
+        run: |
+          sed -i 's/check_defconfig//' gki/common/build.config.gki
+            
       - name: Remove check_defconfig & Update Defconfig
         working-directory: gki/common
         run: |
-          sed -i 's/check_defconfig//' gki/common/build.config.gki
           DEFCONFIG="arch/arm64/configs/gki_defconfig" 
           echo "⚙️ Added KSU & SuSFS configuration"
           cat >> $DEFCONFIG <<EOF
