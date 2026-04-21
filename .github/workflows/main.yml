@@ -46,7 +46,7 @@ jobs:
           cd gki/common
           git remote add waheiiiddd-lab https://github.com/waheiiiddd-lab/Kolor-ijo.git
           git fetch -j12 waheiiiddd-lab
-          git checkout -b update-anisphia waheiiiddd-lab/anisphia
+          git checkout -b update-lts waheiiiddd-lab/lts
           rm -rf drivers/staging/kernelsu
 
       - name: Setup ksu
