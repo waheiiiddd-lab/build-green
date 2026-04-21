@@ -70,12 +70,12 @@ jobs:
 
             if [ -f "drivers/kernelsu/ksu.c" ]; then
             sed -i '/^#if.*CONFIG_STACKPROTECTOR_PER_TASK/c\#if 0 \/\/ Disabled to fix duplicate symbol' drivers/kernelsu/ksu.c || true
-            log "Stack protector fix applied."
+            echo "Stack protector fix applied."
             else
-            log "Skipping obsolete stack protector fix (File not found in KernelSU-Next)."
+            echo "Skipping obsolete stack protector fix (File not found in KernelSU-Next)."
             fi
 
-            log "Applying AVC spoof compatibility fix (ALL GKI)..."
+            echo "Applying AVC spoof compatibility fix (ALL GKI)..."
             if [ -f "drivers/kernelsu/extras.c" ]; then
             EXTRAS_FIX_TMP="$WORKDIR/.extras_avc_fix_tmp"
             if grep -q "susfs_avc_log_spoofing_key_true" "drivers/kernelsu/extras.c"; then
@@ -87,7 +87,7 @@ jobs:
             #endif
             #endif
             AVC_STATIC_KEY_EOF
-                  log "Detected Static Key pattern, applying weak definition fix..."
+                  echo "Detected Static Key pattern, applying weak definition fix..."
                 elif grep -q "susfs_is_avc_log_spoofing_enabled" "drivers/kernelsu/extras.c"; then
                   cat << 'AVC_BOOL_EOF' > "$EXTRAS_FIX_TMP"
             #ifdef CONFIG_KSU_SUSFS
@@ -97,9 +97,9 @@ jobs:
             #endif
             #endif
             AVC_BOOL_EOF
-                  log "Detected Boolean pattern, applying weak definition fix..."
+                  echo "Detected Boolean pattern, applying weak definition fix..."
                 else
-                  log "[INFO] No SUSFS AVC spoof symbols found in extras.c, skipping fix."
+                  echo "[INFO] No SUSFS AVC spoof symbols found in extras.c, skipping fix."
                   rm -f "$EXTRAS_FIX_TMP"
                   EXTRAS_FIX_TMP=""
                 fi
@@ -110,20 +110,20 @@ jobs:
                     
                     if [ -n "$LAST_INCLUDE_LINE" ] && [ "$LAST_INCLUDE_LINE" -gt 0 ]; then
                       sed -i "${LAST_INCLUDE_LINE}r ${EXTRAS_FIX_TMP}" "drivers/kernelsu/extras.c"
-                      log "[SUCCESS] AVC spoof fix injected into extras.c."
+                      echo "[SUCCESS] AVC spoof fix injected into extras.c."
                     else
                       cat "$EXTRAS_FIX_TMP" "drivers/kernelsu/extras.c" > "drivers/kernelsu/extras.c.tmp"
                       mv "drivers/kernelsu/extras.c.tmp" "drivers/kernelsu/extras.c"
-                      log "[SUCCESS] AVC spoof fix prepended to extras.c."
+                      echo "[SUCCESS] AVC spoof fix prepended to extras.c."
                     fi
                   else
-                    log "[INFO] AVC spoof fix already present in extras.c."
+                    echo "[INFO] AVC spoof fix already present in extras.c."
                   fi
                   
                   rm -f "$EXTRAS_FIX_TMP"
                 fi
               else
-                log "[WARNING] drivers/kernelsu/extras.c not found! Skipping AVC spoof fix."
+                echo "[WARNING] drivers/kernelsu/extras.c not found! Skipping AVC spoof fix."
               fi
             
             echo "Patch All Managers Support..."
