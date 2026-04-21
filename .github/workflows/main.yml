@@ -142,15 +142,26 @@ jobs:
       - name: Set version
         working-directory: gki/common
         run: |
-          echo "" > scripts/setlocalversion
+          # 1. Netralkan scripts/setlocalversion agar tidak menambah tanda '+' atau 'dirty'
+          echo "#!/bin/sh" > scripts/setlocalversion
+          echo "exit 0" >> scripts/setlocalversion
           chmod +x scripts/setlocalversion
 
-          if grep -q '^EXTRAVERSION *=' Makefile; then
-            sed -i "s/^EXTRAVERSION *=.*/EXTRAVERSION/" Makefile
-          else
-            echo "EXTRAVERSION" >> Makefile
-          fi
+          # 2. Definisikan nama kernel Anda di sini (misal: -zixine)
+          KNAME="zixine-elysium-inline-3.5"
 
+          # 3. Update EXTRAVERSION di Makefile dengan benar
+          # Mencari baris yang dimulai dengan EXTRAVERSION dan menggantinya secara total
+          if grep -q '^EXTRAVERSION' Makefile; then
+            sed -i "s/^EXTRAVERSION.*/EXTRAVERSION = $KNAME/" Makefile
+          else
+            # Jika tidak ada (jarang terjadi), tambahkan di bagian atas setelah VERSION/PATCHLEVEL
+            sed -i "4i EXTRAVERSION = $KNAME" Makefile
+          fi
+          
+          echo "Kernel version set to: $(make -s kernelversion)"
+
+          
       - name: Setup Toolchain
         working-directory: gki
         run: |
