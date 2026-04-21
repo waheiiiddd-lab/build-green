@@ -73,10 +73,10 @@ jobs:
             cd KernelSU-Next && patch -p1 < /tmp/ksun-add-more-managers-support.patch && cd ..
             
 
-      - name: Remove check_defconfig
-        run: |
+          - name: Remove check_defconfig & Update Defconfig
+          working-directory: gki/common
+          run: |
           sed -i 's/check_defconfig//' gki/common/build.config.gki
-          
           DEFCONFIG="arch/arm64/configs/gki_defconfig" 
           echo "⚙️ Added KSU & SuSFS configuration"
           cat >> $DEFCONFIG <<EOF
