@@ -136,9 +136,6 @@ jobs:
             curl -LSs "https://raw.githubusercontent.com/Kingfinik98/gki-builder/refs/heads/6.x/kernel-patches/ksu/ksun-add-more-managers-support.patch" -o /tmp/ksun-add-more-managers-support.patch
             cd KernelSU-Next && patch -p1 < /tmp/ksun-add-more-managers-support.patch && cd ..
             
-          export GIT_CLONE_PROTECTION_ACTIVE=false
-          chmod +x *.sh py/*.py
-          ./gki_dconfig_sh
 
       - name: Remove check_defconfig
         run: |
