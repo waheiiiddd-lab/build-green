@@ -44,15 +44,9 @@ jobs:
       - name: Setup Kernel Source
         run: |
           cd gki/common
-          # Tambahkan repo kamu sebagai remote
           git remote add waheiiiddd-lab https://github.com/waheiiiddd-lab/Kolor-ijo.git
-          git fetch waheiiiddd-lab lts
-          
-          # JANGAN checkout branch-nya, tapi AMBIL file-nya saja (Checkout files)
-          # Ini akan menimpa drivers/ dsb tanpa menghapus folder security/
-          git checkout waheiiiddd-lab/lts -- .
-          
-          # Baru setelah itu hapus KernelSU bawaan jika perlu
+          git fetch -j12 waheiiidd-lab
+          git checkout -b update-anisphia waheiiiddd-lab/anisphia
           rm -rf drivers/staging/kernelsu
 
       - name: Setup ksu
@@ -138,8 +132,62 @@ jobs:
             
 
       - name: Remove check_defconfig
+         DEFCONFIG="arch/arm64/configs/gki_defconfig" 
         run: |
           sed -i 's/check_defconfig//' gki/common/build.config.gki
+          echo "⚙️ Added KSU & SuSFS configuration"
+          cat >> $DEFCONFIG <<EOF
+          CONFIG_KSU=y
+          CONFIG_KPM=n
+          CONFIG_KPROBES=y
+          CONFIG_KPROBE_EVENTS=y
+          EOF
+          echo "🔧 Mode: SuSFS Hook Enabled"
+          cat >> $DEFCONFIG <<EOF
+          CONFIG_KSU_SUSFS=y
+          CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y
+          CONFIG_KSU_SUSFS_SUS_PATH=y
+          CONFIG_KSU_SUSFS_SUS_MOUNT=y
+          CONFIG_KSU_SUSFS_SUS_KSTAT_SPOOF_GENERIC=y
+          CONFIG_KSU_SUSFS_SUS_KSTAT=y
+          CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y
+          CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y
+          CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSTAT=y
+          CONFIG_KSU_SUSFS_SUS_OVERLAYFS=n
+          CONFIG_KSU_SUSFS_TRY_UMOUNT=n
+          CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=n
+          CONFIG_KSU_SUSFS_SPOOF_UNAME=y
+          CONFIG_KSU_SUSFS_ENABLE_LOG=y
+          CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
+          CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
+          CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
+          CONFIG_KSU_MANUAL_HOOK=n
+          CONFIG_KSU_HAS_MANUAL_HOOK=n
+          EOF
+          
+          echo "⚙️ Adding Universal Performance Tuning"
+          cat >> $DEFCONFIG <<EOF
+          CONFIG_IP_NF_TARGET_TTL=y
+          CONFIG_TCP_CONG_ADVANCED=y
+          CONFIG_TCP_CONG_WESTWOOD=y
+          # CONFIG_TCP_CONG_BBR is not set
+          CONFIG_DEFAULT_WESTWOOD=y
+          CONFIG_NET_SCH_FQ=y
+          # CONFIG_IOSCHED_BFQ is not set
+          # CONFIG_BFQ_GROUP_IOSCHED is not set
+          CONFIG_DEFAULT_ADIOS=y
+          CONFIG_MQ_IOSCHED_ADIOS=y
+          CONFIG_DEFAULT_ADIOS=y
+          CONFIG_MQ_DEADLINE=y
+          CONFIG_DEFAULT_MQ_DEADLINE=y
+          # CONFIG_DEFAULT_FQ_CODEL is not set
+          CONFIG_HZ_300=y
+          CONFIG_HZ=300
+          CONFIG_CPU_FREQ=y
+          CONFIG_SWAP=y
+          CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
+          CONFIG_CPU_FREQ_GOV_ONDEMAND=y
+          EOF
 
       - name: Patch DRM Xiaomi
         working-directory: gki/common
