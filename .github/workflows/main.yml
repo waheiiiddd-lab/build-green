@@ -67,64 +67,6 @@ jobs:
             else
               echo "Skipping obsolete SUSFS uname fix."
             fi
-
-            if [ -f "drivers/kernelsu/ksu.c" ]; then
-            sed -i '/^#if.*CONFIG_STACKPROTECTOR_PER_TASK/c\#if 0 \/\/ Disabled to fix duplicate symbol' drivers/kernelsu/ksu.c || true
-            echo "Stack protector fix applied."
-            else
-            echo "Skipping obsolete stack protector fix (File not found in KernelSU-Next)."
-            fi
-
-            echo "Applying AVC spoof compatibility fix (ALL GKI)..."
-            if [ -f "drivers/kernelsu/extras.c" ]; then
-            EXTRAS_FIX_TMP="$WORKDIR/.extras_avc_fix_tmp"
-            if grep -q "susfs_avc_log_spoofing_key_true" "drivers/kernelsu/extras.c"; then
-            cat << 'AVC_STATIC_KEY_EOF' > "$EXTRAS_FIX_TMP"
-            #ifdef CONFIG_KSU_SUSFS
-            #ifndef susfs_avc_log_spoofing_key_true
-            __attribute__((weak))
-            struct static_key_true susfs_avc_log_spoofing_key_true = STATIC_KEY_TRUE_INIT;
-            #endif
-            #endif
-            AVC_STATIC_KEY_EOF
-                  echo "Detected Static Key pattern, applying weak definition fix..."
-                elif grep -q "susfs_is_avc_log_spoofing_enabled" "drivers/kernelsu/extras.c"; then
-                  cat << 'AVC_BOOL_EOF' > "$EXTRAS_FIX_TMP"
-            #ifdef CONFIG_KSU_SUSFS
-            #ifndef susfs_is_avc_log_spoofing_enabled
-            __attribute__((weak))
-            bool susfs_is_avc_log_spoofing_enabled = false;
-            #endif
-            #endif
-            AVC_BOOL_EOF
-                  echo "Detected Boolean pattern, applying weak definition fix..."
-                else
-                  echo "[INFO] No SUSFS AVC spoof symbols found in extras.c, skipping fix."
-                  rm -f "$EXTRAS_FIX_TMP"
-                  EXTRAS_FIX_TMP=""
-                fi
-                
-                if [ -n "$EXTRAS_FIX_TMP" ] && [ -f "$EXTRAS_FIX_TMP" ]; then
-                  if ! grep -q "__attribute__((weak))" "drivers/kernelsu/extras.c"; then
-                    LAST_INCLUDE_LINE=$(grep -n '#include' "drivers/kernelsu/extras.c" | tail -1 | cut -d: -f1)
-                    
-                    if [ -n "$LAST_INCLUDE_LINE" ] && [ "$LAST_INCLUDE_LINE" -gt 0 ]; then
-                      sed -i "${LAST_INCLUDE_LINE}r ${EXTRAS_FIX_TMP}" "drivers/kernelsu/extras.c"
-                      echo "[SUCCESS] AVC spoof fix injected into extras.c."
-                    else
-                      cat "$EXTRAS_FIX_TMP" "drivers/kernelsu/extras.c" > "drivers/kernelsu/extras.c.tmp"
-                      mv "drivers/kernelsu/extras.c.tmp" "drivers/kernelsu/extras.c"
-                      echo "[SUCCESS] AVC spoof fix prepended to extras.c."
-                    fi
-                  else
-                    echo "[INFO] AVC spoof fix already present in extras.c."
-                  fi
-                  
-                  rm -f "$EXTRAS_FIX_TMP"
-                fi
-              else
-                echo "[WARNING] drivers/kernelsu/extras.c not found! Skipping AVC spoof fix."
-              fi
             
             echo "Patch All Managers Support..."
             curl -LSs "https://raw.githubusercontent.com/Kingfinik98/gki-builder/refs/heads/6.x/kernel-patches/ksu/ksun-add-more-managers-support.patch" -o /tmp/ksun-add-more-managers-support.patch
