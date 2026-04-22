@@ -18,7 +18,7 @@ on:
       kernel_name:
         description: 'Kernel Name'
         required: false
-        default: 'zixine-elysium-inline-3.5'
+        default: 'zixine-elysium-inline'
         type: string
       variant:
         description: 'Variant'
@@ -182,7 +182,7 @@ jobs:
           if [ "$VARIANT" == "KSU" ]; then
             SUFFIX="$SUFFIX-KSU"
           elif [ "$VARIANT" == "KSUS" ]; then
-            SUFFIX="$SUFFIX-velocity"
+            SUFFIX="$SUFFIX-HybridVelocity.3.6"
           elif [ "$VARIANT" == "VNL" ]; then
             SUFFIX="$SUFFIX-VNL"
           fi
