@@ -223,7 +223,8 @@ jobs:
          export SKIP_ABI_CHECKS=1
          export UPDATE_SYMBOL_LIST=1
          export KMI_SYMBOL_LIST_STRICT_MODE=0
-         KBUILD_BUILD_USER="zixine" KBUILD_BUILD_HOST="aitt"
+         KBUILD_BUILD_USER="zixine"
+         KBUILD_BUILD_HOST="aitt"
          LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh -j$(nproc --all)
 
       - name: Package Kernel
