@@ -209,30 +209,42 @@ jobs:
 
       - name: Build Kernel
         run: |
-         export SKIP_ABI_CHECKS=1
-         export UPDATE_SYMBOL_LIST=1
-         export KMI_SYMBOL_LIST_STRICT_MODE=0
-         CLANG_DIR=$GITHUB_WORKSPACE/clang
-         GAS_DIR=$GITHUB_WORKSPACE/gas
-         OUT_DIR=$GITHUB_WORKSPACE/gki/out   
-         export PATH="$CLANG_DIR/bin:$GAS_DIR:$PATH"
-         export KBUILD_BUILD_USER="aitt"
-         export KBUILD_BUILD_HOST="zixineProject"
-         export KCFLAGS="-w"
-         # 1. Make Defconfig
-         make -C gki/common O=$OUT_DIR ARCH=arm64 gki_defconfig
-         # 2. Compile menggunakan GAS (LLVM_IAS=0)
-         make -C gki/common \
-             O=$OUT_DIR \
-             ARCH=arm64 \
-             LLVM=1 \
-             LLVM_IAS=0 \
-             CLANG_TRIPLE=aarch64-linux-gnu- \
-             CROSS_COMPILE=aarch64-linux-gnu- \
-             CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
-             -j$(nproc --all) \
-             Image.gz
-            
+          # 1. Gunakan path absolut agar tidak ada 'not found'
+          CLANG_DIR=$GITHUB_WORKSPACE/clang
+          GAS_DIR=$GITHUB_WORKSPACE/gas
+          OUT_DIR=$GITHUB_WORKSPACE/gki/out
+          
+          # Tambahkan bin folder clang DAN folder GAS ke PATH
+          export PATH="$CLANG_DIR/bin:$GAS_DIR:$PATH"
+          
+          # Tambahkan variabel agar sistem tahu di mana letak library LLVM
+          export LD_LIBRARY_PATH="$CLANG_DIR/lib:$LD_LIBRARY_PATH"
+          
+          export KBUILD_BUILD_USER="zixine"
+          export KBUILD_BUILD_HOST="velocity-engine"
+          export KCFLAGS="-w"
+
+          # 3. Jalankan Config
+          make -C gki/common O=$OUT_DIR ARCH=arm64 gki_defconfig
+
+          # 4. Compile (Tambahkan LD=ld.lld secara eksplisit)
+          make -C gki/common \
+              O=$OUT_DIR \
+              ARCH=arm64 \
+              LLVM=1 \
+              LLVM_IAS=0 \
+              LD=ld.lld \
+              AR=llvm-ar \
+              NM=llvm-nm \
+              OBJCOPY=llvm-objcopy \
+              OBJDUMP=llvm-objdump \
+              STRIP=llvm-strip \
+              CLANG_TRIPLE=aarch64-linux-gnu- \
+              CROSS_COMPILE=aarch64-linux-gnu- \
+              CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+              -j$(nproc --all) \
+              Image.gz
+         
       - name: Package Kernel
         run: |
           mkdir -p artifacts
