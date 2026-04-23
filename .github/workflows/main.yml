@@ -225,8 +225,38 @@ jobs:
          export KMI_SYMBOL_LIST_STRICT_MODE=0
          KBUILD_BUILD_USER="zixine"
          KBUILD_BUILD_HOST="aitt"
-         LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh -j$(nproc --all)
-         
+
+
+      - name: Build Kernel with GAS and Clang r547379
+       working-directory: gki
+       run: |
+        # 1. Setup Path (Asumsi toolchain sudah di-download di step sebelumnya)
+        CLANG_DIR=$GITHUB_WORKSPACE/clang
+        GAS_DIR=$GITHUB_WORKSPACE/gas
+        OUT_DIR=$GITHUB_WORKSPACE/out
+        
+        # Masukkan Clang dan GAS ke PATH
+        export PATH="$CLANG_DIR/bin:$GAS_DIR:$PATH"
+        
+        # 2. Setup Environment
+        export KBUILD_BUILD_USER="zixine"
+        export KBUILD_BUILD_HOST="velocity-engine"
+        
+        # Gunakan -O2 untuk stabilitas atau -O3 untuk performa (pilih salah satu)
+        export KCFLAGS="-O2 -w" 
+
+        # 3. Eksekusi Make
+        make -C gki/common \
+            O=$OUT_DIR \
+            ARCH=arm64 \
+            LLVM=1 \
+            LLVM_IAS=0 \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+            -j$(nproc --all) \
+            Image.gz
+            
       - name: Package Kernel
         run: |
           mkdir -p artifacts
