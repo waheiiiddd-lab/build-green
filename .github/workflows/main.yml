@@ -193,23 +193,13 @@ jobs:
             echo "EXTRAVERSION = $SUFFIX" >> Makefile
           fi
 
-      - name: Setup Toolchain
-        working-directory: gki
+      - name: Download Clang and GAS
         run: |
-          mkdir -p prebuilts-master/clang/host/linux-x86
-          CLANG_VER="clang-r596125"
-          CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/f60b8b55282f002f594f452ce22dfd6cf1fd7e3c/clang-r596125.tar.gz"
-          echo "CLANG_VER=$CLANG_VER" >> $GITHUB_ENV
-          mkdir -p prebuilts-master/clang/host/linux-x86/$CLANG_VER
-          cd prebuilts-master/clang/host/linux-x86
-
-          curl -L "${CLANG_URL}" -o clang-temp.tar.gz
-          tar -xzf clang-temp.tar.gz -C $CLANG_VER
-          
-          rm -f clang-temp.tar.gz
-          
-          rm -rf clang-r563880b
-          ln -sf $CLANG_VER clang-r563880b
+          mkdir -p clang
+          curl -LSs https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b/archive/refs/heads/lineage-20.0.tar.gz -o clang.tar.gz
+          tar -C clang/ -xzf clang.tar.gz
+          # Clone GAS to a specific directory so it can be included in the PATH
+          git clone --depth=1 -q https://android.googlesource.com/platform/prebuilts/gas/linux-x86 -b main $GITHUB_WORKSPACE/gas
       
       - name: Commit changes
         working-directory: gki/common
@@ -217,45 +207,31 @@ jobs:
           git add .
           git commit -m "Final clean tree before build" || true
 
-      - name: Compile
-        working-directory: gki
+      - name: Build Kernel
         run: |
          export SKIP_ABI_CHECKS=1
          export UPDATE_SYMBOL_LIST=1
          export KMI_SYMBOL_LIST_STRICT_MODE=0
-         KBUILD_BUILD_USER="zixine"
-         KBUILD_BUILD_HOST="aitt"
-
-
-      - name: Build Kernel with GAS and Clang r547379
-       working-directory: gki
-       run: |
-        # 1. Setup Path (Asumsi toolchain sudah di-download di step sebelumnya)
-        CLANG_DIR=$GITHUB_WORKSPACE/clang
-        GAS_DIR=$GITHUB_WORKSPACE/gas
-        OUT_DIR=$GITHUB_WORKSPACE/out
-        
-        # Masukkan Clang dan GAS ke PATH
-        export PATH="$CLANG_DIR/bin:$GAS_DIR:$PATH"
-        
-        # 2. Setup Environment
-        export KBUILD_BUILD_USER="zixine"
-        export KBUILD_BUILD_HOST="velocity-engine"
-        
-        # Gunakan -O2 untuk stabilitas atau -O3 untuk performa (pilih salah satu)
-        export KCFLAGS="-O2 -w" 
-
-        # 3. Eksekusi Make
-        make -C gki/common \
-            O=$OUT_DIR \
-            ARCH=arm64 \
-            LLVM=1 \
-            LLVM_IAS=0 \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
-            -j$(nproc --all) \
-            Image.gz
+         CLANG_DIR=$GITHUB_WORKSPACE/clang
+         GAS_DIR=$GITHUB_WORKSPACE/gas
+         OUT_DIR=$GITHUB_WORKSPACE/gki/out   
+         export PATH="$CLANG_DIR/bin:$GAS_DIR:$PATH"
+         export KBUILD_BUILD_USER="aitt"
+         export KBUILD_BUILD_HOST="zixineProject"
+         export KCFLAGS="-w"
+         # 1. Make Defconfig
+         make -C gki/common O=$OUT_DIR ARCH=arm64 gki_defconfig
+         # 2. Compile menggunakan GAS (LLVM_IAS=0)
+         make -C gki/common \
+             O=$OUT_DIR \
+             ARCH=arm64 \
+             LLVM=1 \
+             LLVM_IAS=0 \
+             CLANG_TRIPLE=aarch64-linux-gnu- \
+             CROSS_COMPILE=aarch64-linux-gnu- \
+             CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+             -j$(nproc --all) \
+             Image.gz
             
       - name: Package Kernel
         run: |
@@ -268,7 +244,6 @@ jobs:
           echo "BASE=$BASE" >> $GITHUB_ENV
           ZIP_NAME="${BASE}.zip"
 
-          # TAMBAHKAN KATA anykernel DI AKHIR BARIS INI
           git clone -q --depth=1 https://github.com/waheiiiddd-lab/AnyKernel345 anykernel
           
           cp gki/out/android12-5.10/dist/Image anykernel/
