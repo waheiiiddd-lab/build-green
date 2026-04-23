@@ -193,57 +193,74 @@ jobs:
             echo "EXTRAVERSION = $SUFFIX" >> Makefile
           fi
 
-      - name: Download Clang and GAS
+      - name: Setup Toolchain
         run: |
-          mkdir -p clang
-          curl -LSs https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b/archive/refs/heads/lineage-20.0.tar.gz -o clang.tar.gz
-          tar -C clang/ -xzf clang.tar.gz
-          # Clone GAS to a specific directory so it can be included in the PATH
-          git clone --depth=1 -q https://android.googlesource.com/platform/prebuilts/gas/linux-x86 -b main $GITHUB_WORKSPACE/gas
-      
+          WD=$(pwd)
+
+          GCC64_DIR="$WD/tc/gcc-arm64"
+          GCC32_DIR="$WD/tc/gcc-arm"
+
+          mkdir -p "$GCC64_DIR" "$GCC32_DIR"
+
+          echo "Download Eva GCC arm64..."
+          curl -fL --retry 3 https://github.com/mvaisakh/gcc-build/releases/download/31122025/eva-gcc-arm64-31122025.xz -o gcc64.xz
+
+          tar xf gcc64.xz --strip-components=1 -C "$GCC64_DIR"
+
+          echo "Download Eva GCC arm..."
+          curl -fL --retry 3 https://github.com/mvaisakh/gcc-build/releases/download/31122025/eva-gcc-arm-31122025.xz -o gcc32.xz
+
+          tar xf gcc32.xz --strip-components=1 -C "$GCC32_DIR"
+
+          echo "PATH=$GCC64_DIR/bin:$GCC32_DIR/bin:$PATH" >> $GITHUB_ENV
+          
       - name: Commit changes
         working-directory: gki/common
         run: |
           git add .
           git commit -m "Final clean tree before build" || true
 
-      - name: Build Kernel
+      - name: Compile
+        working-directory: gki/common
         run: |
-          # 1. Gunakan path absolut agar tidak ada 'not found'
-          CLANG_DIR=$GITHUB_WORKSPACE/clang
-          GAS_DIR=$GITHUB_WORKSPACE/gas
-          OUT_DIR=$GITHUB_WORKSPACE/gki/out
-          
-          # Tambahkan bin folder clang DAN folder GAS ke PATH
-          export PATH="$CLANG_DIR/bin:$GAS_DIR:$PATH"
-          
-          # Tambahkan variabel agar sistem tahu di mana letak library LLVM
-          export LD_LIBRARY_PATH="$CLANG_DIR/lib:$LD_LIBRARY_PATH"
-          
+          set -e
+
+          WORKDIR="$(pwd)"
+          OUTDIR="$WORKDIR/out"
+          DEFCONFIG=gki_defconfig
+
+          mkdir -p "$OUTDIR"
+
+          GCC64_DIR="$GITHUB_WORKSPACE/tc/gcc-arm64"
+          GCC32_DIR="$GITHUB_WORKSPACE/tc/gcc-arm"
+
+          export PATH="$GCC64_DIR/bin:$GCC32_DIR/bin:$PATH"
+
           export KBUILD_BUILD_USER="zixine"
-          export KBUILD_BUILD_HOST="velocity-engine"
+          export KBUILD_BUILD_HOST="zixineProject"
           export KCFLAGS="-w"
 
-          # 3. Jalankan Config
-          make -C gki/common O=$OUT_DIR ARCH=arm64 gki_defconfig
+          export KBUILD_COMPILER_STRING="$("$GCC64_DIR/bin/aarch64-elf-gcc" --version | head -n1)"
 
-          # 4. Compile (Tambahkan LD=ld.lld secara eksplisit)
-          make -C gki/common \
-              O=$OUT_DIR \
-              ARCH=arm64 \
-              LLVM=1 \
-              LLVM_IAS=0 \
-              LD=ld.lld \
-              AR=llvm-ar \
-              NM=llvm-nm \
-              OBJCOPY=llvm-objcopy \
-              OBJDUMP=llvm-objdump \
-              STRIP=llvm-strip \
-              CLANG_TRIPLE=aarch64-linux-gnu- \
-              CROSS_COMPILE=aarch64-linux-gnu- \
-              CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
-              -j$(nproc --all) \
-              Image.gz
+          MAKE=(
+            make
+            CROSS_COMPILE=aarch64-elf-
+            CROSS_COMPILE_COMPAT=arm-eabi-
+            CC=aarch64-elf-gcc
+            LD=aarch64-elf-ld
+            AR=aarch64-elf-gcc-ar
+            NM=aarch64-elf-nm
+            OBJCOPY=aarch64-elf-objcopy
+            OBJDUMP=aarch64-elf-objdump
+            LLVM=0
+            LLVM_IAS=0
+          )
+
+          echo "Regen"
+          "${MAKE[@]}" ARCH=arm64 O=$OUTDIR $DEFCONFIG
+
+          echo "Build"
+          "${MAKE[@]}" ARCH=arm64 O=$OUTDIR -j$(nproc --all)
          
       - name: Package Kernel
         run: |
