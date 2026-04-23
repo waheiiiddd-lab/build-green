@@ -62,6 +62,27 @@ jobs:
       - name: Install build tools
         run: sudo apt install -y git curl bc bison flex unzip zip repo rsync aria2 wget
 
+      - name: Setup Toolchain
+        run: |
+          WD=$(pwd)
+
+          GCC64_DIR="$WD/tc/gcc-arm64"
+          GCC32_DIR="$WD/tc/gcc-arm"
+
+          mkdir -p "$GCC64_DIR" "$GCC32_DIR"
+
+          echo "Download Eva GCC arm64..."
+          curl -fL --retry 3 https://github.com/mvaisakh/gcc-build/releases/download/31122025/eva-gcc-arm64-31122025.xz -o gcc64.xz
+
+          tar xf gcc64.xz --strip-components=1 -C "$GCC64_DIR"
+
+          echo "Download Eva GCC arm..."
+          curl -fL --retry 3 https://github.com/mvaisakh/gcc-build/releases/download/31122025/eva-gcc-arm-31122025.xz -o gcc32.xz
+
+          tar xf gcc32.xz --strip-components=1 -C "$GCC32_DIR"
+
+          echo "PATH=$GCC64_DIR/bin:$GCC32_DIR/bin:$PATH" >> $GITHUB_ENV
+
       - name: Init & Sync GKI
         run: |
           mkdir gki && cd gki
@@ -192,28 +213,7 @@ jobs:
           else
             echo "EXTRAVERSION = $SUFFIX" >> Makefile
           fi
-
-      - name: Setup Toolchain
-        run: |
-          WD=$(pwd)
-
-          GCC64_DIR="$WD/tc/gcc-arm64"
-          GCC32_DIR="$WD/tc/gcc-arm"
-
-          mkdir -p "$GCC64_DIR" "$GCC32_DIR"
-
-          echo "Download Eva GCC arm64..."
-          curl -fL --retry 3 https://github.com/mvaisakh/gcc-build/releases/download/31122025/eva-gcc-arm64-31122025.xz -o gcc64.xz
-
-          tar xf gcc64.xz --strip-components=1 -C "$GCC64_DIR"
-
-          echo "Download Eva GCC arm..."
-          curl -fL --retry 3 https://github.com/mvaisakh/gcc-build/releases/download/31122025/eva-gcc-arm-31122025.xz -o gcc32.xz
-
-          tar xf gcc32.xz --strip-components=1 -C "$GCC32_DIR"
-
-          echo "PATH=$GCC64_DIR/bin:$GCC32_DIR/bin:$PATH" >> $GITHUB_ENV
-          
+    
       - name: Commit changes
         working-directory: gki/common
         run: |
