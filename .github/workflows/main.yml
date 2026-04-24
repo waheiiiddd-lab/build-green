@@ -59,26 +59,6 @@ jobs:
           git config --global user.name "zixine"
           git config --global user.email "waheiiiddd@gmail.com"
 
-
-      - name: Setup Compiler (Clang 12)
-        working-directory: gki
-        run: |
-          mkdir -p prebuilts-master/clang/host/linux-x86
-          
-          ACTUAL_VER="clang-r416183b"
-          ACTUAL_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master-kernel-build-2021/clang-r416183b.tar.gz"
-          EXPECTED_VER="clang-r563880b"
-          
-          echo "⬇️ Downloading Clang 12..."
-          mkdir -p "prebuilts-master/clang/host/linux-x86/$ACTUAL_VER"
-          curl -L "$ACTUAL_URL" | tar -xz -C "prebuilts-master/clang/host/linux-x86/$ACTUAL_VER"
-          
-          echo "🔗 Symlinking $EXPECTED_VER -> $ACTUAL_VER..."
-          cd prebuilts-master/clang/host/linux-x86
-          rm -rf "$EXPECTED_VER"
-          ln -s "$ACTUAL_VER" "$EXPECTED_VER"
-          echo "✅ Compiler Ready."
-
       - name: Init & Sync GKI
         run: |
           mkdir gki && cd gki
@@ -210,6 +190,25 @@ jobs:
           else
             echo "EXTRAVERSION = $SUFFIX" >> Makefile
           fi
+
+      - name: Setup Compiler (Clang 12)
+        working-directory: gki
+        run: |
+          mkdir -p prebuilts-master/clang/host/linux-x86
+          
+          ACTUAL_VER="clang-r416183b"
+          ACTUAL_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master-kernel-build-2021/clang-r416183b.tar.gz"
+          EXPECTED_VER="clang-r563880b"
+          
+          echo "⬇️ Downloading Clang 12..."
+          mkdir -p "prebuilts-master/clang/host/linux-x86/$ACTUAL_VER"
+          curl -L "$ACTUAL_URL" | tar -xz -C "prebuilts-master/clang/host/linux-x86/$ACTUAL_VER"
+          
+          echo "🔗 Symlinking $EXPECTED_VER -> $ACTUAL_VER..."
+          cd prebuilts-master/clang/host/linux-x86
+          rm -rf "$EXPECTED_VER"
+          ln -s "$ACTUAL_VER" "$EXPECTED_VER"
+          echo "✅ Compiler Ready."
     
       - name: Commit changes
         working-directory: gki/common
