@@ -1,0 +1,320 @@
+#script by Rinskaguchi
+
+name: Build GKI
+on:
+  workflow_call:
+    inputs:
+      KERNEL_NAME:
+        type: string
+        required: true
+      VARIANT:
+        type: string
+        required: true
+      SCHED_HZ:
+        type: string
+        required: true
+      BRANCH:
+        type: string
+        required: true
+
+  workflow_dispatch:
+    inputs:
+      kernel_name:
+        description: 'Kernel Name'
+        required: false
+        default: 'Anisphia'
+        type: string
+      branch:
+        description: "Kernel source branch"
+        required: true
+        default: "android12-5.10-staging"
+        type: choice
+        options:
+          - lts
+          - test
+          - android_kernel_common-5.10
+          - android12-5.10-staging
+      variant:
+        description: 'Variant'
+        required: true
+        type: choice
+        default: 'KSU'
+        options:
+          - 'KSU'
+          - 'KSUS'
+          - 'VNL'
+      scheduler_hz:
+        description: 'Kernel tickrates'
+        required: true
+        type: choice
+        default: '250HZ'
+        options:
+          - '100HZ'
+          - '250HZ'
+          - '300HZ'
+          - '500HZ'
+          - '750HZ'
+          - '1000HZ'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ inputs.KERNEL_NAME }}-${{ inputs.VARIANT }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve Branch Variables
+        run: |
+          BRANCH_INPUT="${{ github.event.inputs.branch || inputs.branch }}"
+          echo "KERNEL_BRANCH=$BRANCH_INPUT" >> $GITHUB_ENV
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "zixine"
+          git config --global user.email "waheiiiddd@gmail.com"
+
+      - name: Install build tools
+        run: sudo apt install -y git curl bc bison flex unzip zip repo rsync aria2 wget
+      
+      - name: Setup Toolchain
+        run: |
+          WD=$(pwd)
+
+          GCC64_DIR="$WD/tc/gcc-arm64"
+          GCC32_DIR="$WD/tc/gcc-arm"
+
+          mkdir -p "$GCC64_DIR" "$GCC32_DIR"
+
+          echo "Download Eva GCC arm64..."
+          curl -fL --retry 3 https://github.com/mvaisakh/gcc-build/releases/download/31122025/eva-gcc-arm64-31122025.xz -o gcc64.xz
+
+          tar xf gcc64.xz --strip-components=1 -C "$GCC64_DIR"
+
+          echo "Download Eva GCC arm..."
+          curl -fL --retry 3 https://github.com/mvaisakh/gcc-build/releases/download/31122025/eva-gcc-arm-31122025.xz -o gcc32.xz
+
+          tar xf gcc32.xz --strip-components=1 -C "$GCC32_DIR"
+
+          echo "PATH=$GCC64_DIR/bin:$GCC32_DIR/bin:$PATH" >> $GITHUB_ENV
+
+      - name: Init & Sync GKI
+        run: |
+          mkdir gki && cd gki
+          repo init -u https://android.googlesource.com/kernel/manifest -b common-android12-5.10 --depth=1
+          repo sync -c -j$(nproc --all) --fail-fast --no-tags --force-sync --no-clone-bundle --optimized-fetch --prune
+
+      - name: Setup Kernel Source
+        run: |
+          cd gki/common
+          git remote add Anisphia https://github.com/waheiiiddd-lab/android_kernel_common-5.10.git
+          git fetch -j12 Anisphia
+          git checkout -b "update-$KERNEL_BRANCH" "Anisphia/$KERNEL_BRANCH"
+          rm -rf drivers/staging/kernelsu
+      
+      - name: Patch Qcom
+        run: |
+          cd gki/common
+          TARGET="drivers/cpufreq/qcom-cpufreq-hw.c"
+          SRC_URL="https://raw.githubusercontent.com/Pzqqt/android_kernel_xiaomi_marble/refs/heads/melt-rebase/drivers/cpufreq/qcom-cpufreq-hw.c"
+          curl -L "$SRC_URL" -o /tmp/qcom-cpufreq-hw.c
+          cp /tmp/qcom-cpufreq-hw.c "$TARGET"
+
+      - name: Setup Variant
+        working-directory: gki/common
+        run: |
+          DEFCONFIG="arch/arm64/configs/gki_defconfig"
+          VARIANT="${{ inputs.VARIANT }}"
+          
+          sed -i '/CONFIG_KSU/d' $DEFCONFIG
+          sed -i '/CONFIG_KSU_SUSFS/d' $DEFCONFIG
+
+          if [ "$VARIANT" == "KSU" ]; then
+            curl -LSs "https://raw.githubusercontent.com/pershoot/kernelSU-Next/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
+            echo "CONFIG_KSU=y" >> $DEFCONFIG
+            echo "# CONFIG_KSU_SUSFS is not set" >> $DEFCONFIG
+            echo "ENABLE_SUSFS=false" >> $GITHUB_ENV
+            
+            echo "Patch All Managers Support..."
+            curl -LSs "https://raw.githubusercontent.com/rinnsakaguchi/gki-builder/refs/heads/main/kernel-patched/ksun-allmanager.patch" -o /tmp/ksun-allmanager.patch
+            cd KernelSU-Next && patch -p1 < /tmp/ksun-allmanager.patch && cd ..
+
+          elif [ "$VARIANT" == "KSUS" ]; then
+            curl -LSs "https://raw.githubusercontent.com/pershoot/kernelSU-Next/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
+            git clone https://gitlab.com/simonpunk/susfs4ksu/ -b gki-android12-5.10 sus
+            rm -rf sus/.git
+            susfs=sus/kernel_patches
+            cp -r $susfs/fs . && cp -r $susfs/include .
+            cp -r $susfs/50_add_susfs_in_gki-android12-5.10.patch .
+            patch -p1 < 50_add_susfs_in_gki-android12-5.10.patch
+
+            echo "CONFIG_KSU=y" >> $DEFCONFIG
+            echo "CONFIG_KSU_SUSFS=y" >> $DEFCONFIG
+            if [ -f "drivers/kernelsu/supercalls.c" ]; then
+              sed -i 's/#ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME/#if 0 \/\* CONFIG_KSU_SUSFS_SPOOF_UNAME Disabled to fix build \*\//' drivers/kernelsu/supercalls.c || true
+              echo "SUSFS symbol fix applied for KernelSU-Next."
+            else
+              echo "Skipping obsolete SUSFS uname fix."
+            fi
+            echo "ENABLE_SUSFS=true" >> $GITHUB_ENV
+            
+            echo "Patch All Managers Support..."
+            curl -LSs "https://raw.githubusercontent.com/rinnsakaguchi/gki-builder/refs/heads/main/kernel-patched/ksun-allmanager.patch" -o /tmp/ksun-allmanager.patch
+            cd KernelSU-Next && patch -p1 < /tmp/ksun-allmanager.patch && cd ..
+
+          else
+            echo "ENABLE_SUSFS=false" >> $GITHUB_ENV
+          fi
+          
+          sed -i '/CONFIG_HZ=/d' "$DEFCONFIG"
+
+          HZ="${{ inputs.SCHED_HZ }}"
+          HZ="${HZ%HZ}"
+
+          cat <<EOF >> "$DEFCONFIG"
+          CONFIG_HZ=$HZ
+          CONFIG_CPU_FREQ_GOV_ZIXINE_VELOCITY=y
+          CONFIG_ENERGY_MODEL=y
+          CONFIG_JUMP_LABEL=y
+          EOF
+      
+      - name: Patch DRM
+        working-directory: gki/common
+        run: |
+          sed -i '/pr_warn.*disagrees about version of symbol.*/,+1 s/.*/return 1;/' kernel/module.c
+          sed -i '/^static int drm_atomic_check_valid_clones/,/^}/d' drivers/gpu/drm/drm_atomic_helper.c
+          sed -i '/ret = drm_atomic_check_valid_clones/,/return ret;/d' drivers/gpu/drm/drm_atomic_helper.c
+      
+      - name: Remove check_defconfig
+        run: |
+          sed -i 's/check_defconfig//' gki/common/build.config.gki
+      
+      - name: Set version
+        working-directory: gki/common
+        run: |
+          echo "" > scripts/setlocalversion
+          chmod +x scripts/setlocalversion
+          
+          KERNEL_NAME_INPUT="${{ inputs.KERNEL_NAME }}"
+          VARIANT="${{ inputs.VARIANT }}"
+          SUFFIX=""
+          if [ -n "$KERNEL_NAME_INPUT" ]; then
+            SUFFIX="-$KERNEL_NAME_INPUT"
+          fi
+          if [ "$VARIANT" == "KSU" ]; then
+            SUFFIX="$SUFFIX-KSU"
+          elif [ "$VARIANT" == "KSUS" ]; then
+            SUFFIX="$SUFFIX-KSUS"
+          elif [ "$VARIANT" == "VNL" ]; then
+            SUFFIX="$SUFFIX-VNL"
+          fi
+
+          if grep -q '^EXTRAVERSION *=' Makefile; then
+            sed -i "s/^EXTRAVERSION *=.*/EXTRAVERSION = $SUFFIX/" Makefile
+          else
+            echo "EXTRAVERSION = $SUFFIX" >> Makefile
+          fi
+      
+      - name: Commit changes
+        working-directory: gki/common
+        run: |
+          git add .
+          git commit -m "Final clean tree before build" || true
+
+      - name: Compile
+        working-directory: gki/common
+        run: |
+          set -e
+
+          WORKDIR="$(pwd)"
+          OUTDIR="$WORKDIR/out"
+          DEFCONFIG=gki_defconfig
+
+          mkdir -p "$OUTDIR"
+
+          GCC64_DIR="$GITHUB_WORKSPACE/tc/gcc-arm64"
+          GCC32_DIR="$GITHUB_WORKSPACE/tc/gcc-arm"
+
+          export PATH="$GCC64_DIR/bin:$GCC32_DIR/bin:$PATH"
+
+          export KBUILD_BUILD_USER="builder-dev"
+          export KBUILD_BUILD_HOST="celoxx"
+          export KCFLAGS="-w"
+
+          export KBUILD_COMPILER_STRING="$("$GCC64_DIR/bin/aarch64-elf-gcc" --version | head -n1)"
+
+          MAKE=(
+            make
+            CROSS_COMPILE=aarch64-elf-
+            CROSS_COMPILE_COMPAT=arm-eabi-
+            CC=aarch64-elf-gcc
+            LD=aarch64-elf-ld
+            AR=aarch64-elf-gcc-ar
+            NM=aarch64-elf-nm
+            OBJCOPY=aarch64-elf-objcopy
+            OBJDUMP=aarch64-elf-objdump
+            LLVM=0
+            LLVM_IAS=0
+          )
+
+          echo "Regen"
+          "${MAKE[@]}" ARCH=arm64 O=$OUTDIR $DEFCONFIG
+
+          echo "Build"
+          "${MAKE[@]}" ARCH=arm64 O=$OUTDIR -j$(nproc --all)
+
+      - name: Package Kernel
+        working-directory: gki/common
+        run: |
+          IMG=""
+
+          if [ -f out/arch/arm64/boot/Image ]; then
+            IMG="out/arch/arm64/boot/Image"
+          elif [ -f out/arch/arm64/boot/Image.gz ]; then
+            IMG="out/arch/arm64/boot/Image.gz"
+          elif [ -f out/arch/arm64/boot/Image.lz4 ]; then
+            IMG="out/arch/arm64/boot/Image.lz4"
+          else
+            echo "Kernel Image not found!"
+            find out -type f | grep Image
+            exit 1
+          fi
+
+          mkdir -p artifacts
+
+          VERSION=$(cat out/include/config/kernel.release 2>/dev/null || make -s O=out kernelrelease)
+
+          BUILD_DATE=$(date +"%Y%m%d")
+          BASE="AK3-${VERSION}-${BUILD_DATE}"
+
+          echo "BASE=$BASE" >> $GITHUB_ENV
+
+          git clone -q --depth=1 https://github.com/waheiiiddd-lab/AnyKernel345 anykernel
+          cp "$IMG" anykernel/Image
+
+          cd anykernel
+          zip -r9 "../artifacts/${BASE}.zip" ./*
+
+          cd ..
+
+          cat <<EOF > artifacts/info.txt
+          KERNEL_NAME=$BASE
+          KVER=$VERSION
+          DATE=$BUILD_DATE
+          EOF
+      
+      - name: Upload AnyKernel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BASE }}-${{ github.run_number }}
+          path: gki/common/artifacts/*.zip
+
+      - name: Upload Info.txt artifact
+        uses: actions/upload-artifact@v4
+        with:
+         name: info-${{ github.run_number }}
+         path: gki/common/artifacts/*.txt
