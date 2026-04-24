@@ -22,7 +22,7 @@ on:
       kernel_name:
         description: 'Kernel Name'
         required: false
-        default: 'Anisphia'
+        default: 'zixine-elysium'
         type: string
       branch:
         description: "Kernel source branch"
@@ -208,7 +208,7 @@ jobs:
           if [ "$VARIANT" == "KSU" ]; then
             SUFFIX="$SUFFIX-KSU"
           elif [ "$VARIANT" == "KSUS" ]; then
-            SUFFIX="$SUFFIX-KSUS"
+            SUFFIX="HybridVelocity-3.7"
           elif [ "$VARIANT" == "VNL" ]; then
             SUFFIX="$SUFFIX-VNL"
           fi
