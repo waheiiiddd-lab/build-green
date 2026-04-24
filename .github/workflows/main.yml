@@ -18,7 +18,7 @@ on:
       kernel_name:
         description: 'Kernel Name'
         required: false
-        default: 'zixine-elysium-inline'
+        default: 'zixine-elysium'
         type: string
       variant:
         description: 'Variant'
@@ -59,29 +59,25 @@ jobs:
           git config --global user.name "zixine"
           git config --global user.email "waheiiiddd@gmail.com"
 
-      - name: Install build tools
-        run: sudo apt install -y git curl bc bison flex unzip zip repo rsync aria2 wget
 
-      - name: Setup Toolchain
+      - name: Setup Compiler (Clang 12)
+        working-directory: gki
         run: |
-          WD=$(pwd)
-
-          GCC64_DIR="$WD/tc/gcc-arm64"
-          GCC32_DIR="$WD/tc/gcc-arm"
-
-          mkdir -p "$GCC64_DIR" "$GCC32_DIR"
-
-          echo "Download Eva GCC arm64..."
-          curl -fL --retry 3 https://github.com/mvaisakh/gcc-build/releases/download/31122025/eva-gcc-arm64-31122025.xz -o gcc64.xz
-
-          tar xf gcc64.xz --strip-components=1 -C "$GCC64_DIR"
-
-          echo "Download Eva GCC arm..."
-          curl -fL --retry 3 https://github.com/mvaisakh/gcc-build/releases/download/31122025/eva-gcc-arm-31122025.xz -o gcc32.xz
-
-          tar xf gcc32.xz --strip-components=1 -C "$GCC32_DIR"
-
-          echo "PATH=$GCC64_DIR/bin:$GCC32_DIR/bin:$PATH" >> $GITHUB_ENV
+          mkdir -p prebuilts-master/clang/host/linux-x86
+          
+          ACTUAL_VER="clang-r416183b"
+          ACTUAL_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master-kernel-build-2021/clang-r416183b.tar.gz"
+          EXPECTED_VER="clang-r563880b"
+          
+          echo "⬇️ Downloading Clang 12..."
+          mkdir -p "prebuilts-master/clang/host/linux-x86/$ACTUAL_VER"
+          curl -L "$ACTUAL_URL" | tar -xz -C "prebuilts-master/clang/host/linux-x86/$ACTUAL_VER"
+          
+          echo "🔗 Symlinking $EXPECTED_VER -> $ACTUAL_VER..."
+          cd prebuilts-master/clang/host/linux-x86
+          rm -rf "$EXPECTED_VER"
+          ln -s "$ACTUAL_VER" "$EXPECTED_VER"
+          echo "✅ Compiler Ready."
 
       - name: Init & Sync GKI
         run: |
@@ -223,44 +219,13 @@ jobs:
       - name: Compile
         working-directory: gki/common
         run: |
-          set -e
-
-          WORKDIR="$(pwd)"
-          OUTDIR="$WORKDIR/out"
-          DEFCONFIG=gki_defconfig
-
-          mkdir -p "$OUTDIR"
-
-          GCC64_DIR="$GITHUB_WORKSPACE/tc/gcc-arm64"
-          GCC32_DIR="$GITHUB_WORKSPACE/tc/gcc-arm"
-
-          export PATH="$GCC64_DIR/bin:$GCC32_DIR/bin:$PATH"
-
           export KBUILD_BUILD_USER="zixine"
           export KBUILD_BUILD_HOST="zixineProject"
           export KCFLAGS="-w"
-
-          export KBUILD_COMPILER_STRING="$("$GCC64_DIR/bin/aarch64-elf-gcc" --version | head -n1)"
-
-          MAKE=(
-            make
-            CROSS_COMPILE=aarch64-elf-
-            CROSS_COMPILE_COMPAT=arm-eabi-
-            CC=aarch64-elf-gcc
-            LD=aarch64-elf-ld
-            AR=aarch64-elf-gcc-ar
-            NM=aarch64-elf-nm
-            OBJCOPY=aarch64-elf-objcopy
-            OBJDUMP=aarch64-elf-objdump
-            LLVM=0
-            LLVM_IAS=0
-          )
-
-          echo "Regen"
-          "${MAKE[@]}" ARCH=arm64 O=$OUTDIR $DEFCONFIG
-
-          echo "Build"
-          "${MAKE[@]}" ARCH=arm64 O=$OUTDIR -j$(nproc --all)
+          export KMI_SYMBOL_LIST_STRICT_MODE=0
+          export KMI_ENFORCED=0
+          export TRIM_NONLISTED_KMI=0
+          LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
          
       - name: Package Kernel
         run: |
