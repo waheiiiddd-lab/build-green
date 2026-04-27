@@ -76,7 +76,7 @@ jobs:
           cd gki/common
           git remote add waheiiiddd-lab https://github.com/ramabondanp/android_kernel_common-5.10.git
           git fetch -j12 waheiiiddd-lab
-          git checkout -b update-android-12.5.20-staging waheiiiddd-lab/lts
+          git checkout -b update android-12.5.20-staging waheiiiddd-lab/android-12.5.20-staging
           rm -rf drivers/staging/kernelsu
       
       - name: Naga Patch
