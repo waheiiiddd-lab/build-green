@@ -71,15 +71,21 @@ jobs:
           git remote add waheiiiddd-lab https://github.com/waheiiiddd-lab/android_kernel_common-5.10.git
           git fetch -j12 waheiiiddd-lab
           git checkout -b update-lts waheiiiddd-lab/lts
+          
+          # Pick DAC fix from rinn/rama
+          git remote add rinn https://github.com/rinnsakaguchi/android_kernel_common-5.10.git
+          git fetch rinn c02e0bc43bfdf8a82561f8948f0ca698ace5168b
+          git cherry-pick c02e0bc43bfdf8a82561f8948f0ca698ace5168b
+          
           rm -rf drivers/staging/kernelsu
       
       - name: Naga Patch
         run: |
-            cd gki/common
-            TARGET="drivers/cpufreq/qcom-cpufreq-hw.c"
-            SRC_URL="https://raw.githubusercontent.com/Pzqqt/android_kernel_xiaomi_marble/refs/heads/melt-rebase/drivers/cpufreq/qcom-cpufreq-hw.c"
-            curl -L "$SRC_URL" -o /tmp/qcom-cpufreq-hw.c
-            cp /tmp/qcom-cpufreq-hw.c "$TARGET"
+          cd gki/common
+          TARGET="drivers/cpufreq/qcom-cpufreq-hw.c"
+          SRC_URL="https://raw.githubusercontent.com/Pzqqt/android_kernel_xiaomi_marble/refs/heads/melt-rebase/drivers/cpufreq/qcom-cpufreq-hw.c"
+          curl -L "$SRC_URL" -o /tmp/qcom-cpufreq-hw.c
+          cp /tmp/qcom-cpufreq-hw.c "$TARGET"
 
       - name: Setup Variant
         working-directory: gki/common
@@ -202,9 +208,7 @@ jobs:
           cd prebuilts-master/clang/host/linux-x86
           curl -L "${CLANG_URL}" -o clang-temp.tar.gz
           tar -xzf clang-temp.tar.gz -C $CLANG_VER
-          
           rm -f clang-temp.tar.gz
-          
           rm -rf clang-r563880b
           ln -sf $CLANG_VER clang-r563880b
       
@@ -213,53 +217,33 @@ jobs:
         run: |
           git add .
           git commit -m "Final clean tree before build" || true
+
       - name: Compile
         working-directory: gki
         run: |
-         export SKIP_ABI_CHECKS=1
-         export UPDATE_SYMBOL_LIST=1
-         export KMI_SYMBOL_LIST_STRICT_MODE=0
-         KBUILD_BUILD_USER="zixine"
-         KBUILD_BUILD_HOST="aitt"
-         LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh -j$(nproc --all)
-         
-      - name: Commit changes
-        working-directory: gki/common
-        run: |
-          git add .
-          git commit -m "Final clean tree before build" || true
-
-      - name: Compile
-        working-directory: gki/common
-        run: |
-          export KBUILD_BUILD_USER="zixine"
-          export KBUILD_BUILD_HOST="zixineProject"
-          export KCFLAGS="-w"
+          export SKIP_ABI_CHECKS=1
+          export UPDATE_SYMBOL_LIST=1
           export KMI_SYMBOL_LIST_STRICT_MODE=0
-          export KMI_ENFORCED=0
-          export TRIM_NONLISTED_KMI=0
-          LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
-         
+          KBUILD_BUILD_USER="zixine"
+          KBUILD_BUILD_HOST="aitt"
+          LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh -j$(nproc --all)
+
       - name: Package Kernel
         run: |
           mkdir -p artifacts
-
           VERSION=$(make -s kernelversion -C gki/common)
-
           BUILD_DATE=$(date +"%Y%m%d")
           BASE="AK3-${VERSION}-+${BUILD_DATE}"
           echo "BASE=$BASE" >> $GITHUB_ENV
           ZIP_NAME="${BASE}.zip"
 
           git clone -q --depth=1 https://github.com/waheiiiddd-lab/AnyKernel345 anykernel
-          
           cp gki/out/android12-5.10/dist/Image anykernel/
 
           cd anykernel
           zip -r9 "../artifacts/$ZIP_NAME" ./*
           cd ..
 
-          # info.txt
           cat <<EOF > artifacts/info.txt
           KERNEL_NAME=$BASE
           KVER=$VERSION
@@ -267,7 +251,6 @@ jobs:
           DATE=$BUILD_DATE
           EOF
 
-      
       - name: Upload AnyKernel artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -277,5 +260,6 @@ jobs:
       - name: Upload Info.txt artifact
         uses: actions/upload-artifact@v4
         with:
-         name: info-${{ github.run_number }}
-         path: artifacts/*.txt
+          name: info-${{ github.run_number }}
+          path: artifacts/*.txt
+          
