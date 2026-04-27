@@ -61,6 +61,12 @@ jobs:
 
       - name: Init & Sync GKI
         run: |
+          # Install repo tool
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          export PATH="$HOME/bin:$PATH"
+
           mkdir gki && cd gki
           repo init -u https://android.googlesource.com/kernel/manifest -b common-android12-5.10 --depth=1
           repo sync -c --no-tags --no-clone-bundle --optimized-fetch -j$(nproc --all)
@@ -72,7 +78,7 @@ jobs:
           git fetch -j12 waheiiiddd-lab
           git checkout -b update-lts waheiiiddd-lab/lts
           
-          # Pick DAC fix from rinn/rama
+          # Pick DAC fix from rinn
           git remote add rinn https://github.com/rinnsakaguchi/android_kernel_common-5.10.git
           git fetch rinn c02e0bc43bfdf8a82561f8948f0ca698ace5168b
           git cherry-pick c02e0bc43bfdf8a82561f8948f0ca698ace5168b
@@ -221,11 +227,13 @@ jobs:
       - name: Compile
         working-directory: gki
         run: |
+          # Ensure repo is in path for build scripts if needed
+          export PATH="$HOME/bin:$PATH"
           export SKIP_ABI_CHECKS=1
           export UPDATE_SYMBOL_LIST=1
           export KMI_SYMBOL_LIST_STRICT_MODE=0
-          KBUILD_BUILD_USER="zixine"
-          KBUILD_BUILD_HOST="aitt"
+          export KBUILD_BUILD_USER="zixine"
+          export KBUILD_BUILD_HOST="aitt"
           LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh -j$(nproc --all)
 
       - name: Package Kernel
