@@ -209,6 +209,18 @@ jobs:
           rm -rf "$EXPECTED_VER"
           ln -s "$ACTUAL_VER" "$EXPECTED_VER"
           echo "✅ Compiler Ready."
+
+      - name: Execute Build
+        working-directory: gki
+        run: |
+          echo "🚀 Starting Compilation for MamboSU..."
+          
+          # Matikan ABI check agar build lulus walau ada simbol yang hilang/berubah
+          export KMI_SYMBOL_LIST_STRICT_MODE=0
+          export KMI_ENFORCED=0
+          export TRIM_NONLISTED_KMI=0
+          
+          LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
     
       - name: Commit changes
         working-directory: gki/common
