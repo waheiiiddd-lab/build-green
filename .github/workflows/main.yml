@@ -191,37 +191,38 @@ jobs:
             echo "EXTRAVERSION = $SUFFIX" >> Makefile
           fi
 
-      - name: Setup Compiler (Clang 12)
+      - name: Setup Toolchain
         working-directory: gki
         run: |
           mkdir -p prebuilts-master/clang/host/linux-x86
-          
-          ACTUAL_VER="clang-r416183b"
-          ACTUAL_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master-kernel-build-2021/clang-r416183b.tar.gz"
-          EXPECTED_VER="clang-r563880b"
-          
-          echo "⬇️ Downloading Clang 12..."
-          mkdir -p "prebuilts-master/clang/host/linux-x86/$ACTUAL_VER"
-          curl -L "$ACTUAL_URL" | tar -xz -C "prebuilts-master/clang/host/linux-x86/$ACTUAL_VER"
-          
-          echo "🔗 Symlinking $EXPECTED_VER -> $ACTUAL_VER..."
+          CLANG_VER="clang-r416183b"
+          CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master-kernel-build-2021/clang-r416183b.tar.gz"
+          echo "CLANG_VER=$CLANG_VER" >> $GITHUB_ENV
+          mkdir -p prebuilts-master/clang/host/linux-x86/$CLANG_VER
           cd prebuilts-master/clang/host/linux-x86
-          rm -rf "$EXPECTED_VER"
-          ln -s "$ACTUAL_VER" "$EXPECTED_VER"
-          echo "✅ Compiler Ready."
-
-      - name: Execute Build
+          curl -L "${CLANG_URL}" -o clang-temp.tar.gz
+          tar -xzf clang-temp.tar.gz -C $CLANG_VER
+          
+          rm -f clang-temp.tar.gz
+          
+          rm -rf clang-r563880b
+          ln -sf $CLANG_VER clang-r563880b
+      
+      - name: Commit changes
+        working-directory: gki/common
+        run: |
+          git add .
+          git commit -m "Final clean tree before build" || true
+      - name: Compile
         working-directory: gki
         run: |
-          echo "🚀 Starting Compilation for MamboSU..."
-          
-          # Matikan ABI check agar build lulus walau ada simbol yang hilang/berubah
-          export KMI_SYMBOL_LIST_STRICT_MODE=0
-          export KMI_ENFORCED=0
-          export TRIM_NONLISTED_KMI=0
-          
-          LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
-    
+         export SKIP_ABI_CHECKS=1
+         export UPDATE_SYMBOL_LIST=1
+         export KMI_SYMBOL_LIST_STRICT_MODE=0
+         KBUILD_BUILD_USER="zixine"
+         KBUILD_BUILD_HOST="aitt"
+         LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh -j$(nproc --all)
+         
       - name: Commit changes
         working-directory: gki/common
         run: |
