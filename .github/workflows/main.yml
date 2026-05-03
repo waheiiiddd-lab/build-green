@@ -288,8 +288,6 @@ jobs:
           MODULE_AUTHOR("Zixine");
           MODULE_DESCRIPTION("Zixine Velocity Governor v1.2.8 (GKI 12-5.10 Fix)");
           MODULE_LICENSE("GPL v2");
-          INNER_EOF
-          )
           EOF
 
           # Catatan: Karena kita menjalankan ini di CI, lebih efisien menggunakan 
