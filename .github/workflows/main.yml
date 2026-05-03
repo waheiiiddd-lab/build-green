@@ -410,7 +410,7 @@ jobs:
           if [ "$VARIANT" == "KSU" ]; then
             SUFFIX="$SUFFIX-KSU"
           elif [ "$VARIANT" == "KSUS" ]; then
-            SUFFIX="$SUFFIX-HybridVelocity.3.7"
+            SUFFIX="$SUFFIX-HybridVelocity.3.8"
           elif [ "$VARIANT" == "VNL" ]; then
             SUFFIX="$SUFFIX-VNL"
           fi
