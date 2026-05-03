@@ -87,6 +87,230 @@ jobs:
           curl -L "$SRC_URL" -o /tmp/qcom-cpufreq-hw.c
           cp /tmp/qcom-cpufreq-hw.c "$TARGET"
 
+      - name: Inject Zixine Velocity Governor
+        working-directory: gki/common
+        run: |
+          # 1. Buat file source code cpufreq_zixine.c
+          cat <<'EOF' > drivers/cpufreq/cpufreq_zixine.c
+          $(cat <<'INNER_EOF'
+                    // SPDX-License-Identifier: GPL-2.0
+          /*
+           * Zixine Velocity v1.2.8 - GKI Fixed
+           * fix implicit declaration dan ISO C90 declaration rules.
+           */
+          
+          #include <linux/cpufreq.h>
+          #include <linux/init.h>
+          #include <linux/kernel.h>
+          #include <linux/module.h>
+          #include <linux/slab.h>
+          #include <linux/workqueue.h>
+          #include <linux/tick.h>
+          #include <linux/sched/cpufreq.h>
+          #include <linux/kernel_stat.h>
+          #include <linux/jiffies.h>
+          
+          /* Parameter Tunable */
+          static unsigned int target_load = 85;
+          static unsigned int velocity_kick = 15;
+          
+          struct zv_cpu_info {
+          	u64 prev_idle;
+          	u64 prev_wall;
+          	unsigned int prev_load;
+          	unsigned int target_freq;
+          	unsigned int hold_count;
+          };
+          
+          static DEFINE_PER_CPU(struct zv_cpu_info, zv_info);
+          
+          struct zv_policy_info {
+          	struct delayed_work work;
+          	struct cpufreq_policy *policy;
+          	bool is_active;
+          };
+          
+          /* Versi aman tanpa nsecs_to_usecs */
+          static u64 get_cpu_idle_time_gki(int cpu)
+          {
+          	u64 idle_ns;
+          	idle_ns = kcpustat_cpu(cpu).cpustat[CPUTIME_IDLE];
+          	/* Mengganti nsecs_to_usecs dengan pembagian manual */
+          	return div_u64(idle_ns, 1000);
+          }
+          
+          static void zv_eval(struct cpufreq_policy *policy)
+          {
+          	struct zv_cpu_info *info = &per_cpu(zv_info, policy->cpu);
+          	u64 cur_wall, cur_idle, wall_time, idle_time;
+          	unsigned int load, freq_target;
+          	int load_velocity;
+          
+          	cur_wall = ktime_to_us(ktime_get());
+          	cur_idle = get_cpu_idle_time_gki(policy->cpu);
+          
+          	if (unlikely(cur_wall <= info->prev_wall))
+          		return;
+          
+          	wall_time = cur_wall - info->prev_wall;
+          	idle_time = (cur_idle > info->prev_idle) ? (cur_idle - info->prev_idle) : 0;
+          
+          	if (unlikely(wall_time <= idle_time || wall_time == 0)) {
+          		load = 0;
+          	} else {
+          		load = (unsigned int)div64_u64(100 * (wall_time - idle_time), wall_time);
+          	}
+          
+          	info->prev_wall = cur_wall;
+          	info->prev_idle = cur_idle;
+          
+          	/* --- VELOCITY LOGIC --- */
+          	load_velocity = (int)load - (int)info->prev_load;
+          	info->prev_load = load;
+          
+          	if (load_velocity > (int)velocity_kick) {
+          		freq_target = policy->max;
+          		info->hold_count = 10; 
+          	} else if (info->hold_count > 0) {
+          		freq_target = (policy->max * 70) / 100;
+          		if (freq_target < (policy->max * load / target_load))
+          			freq_target = (policy->max * load / target_load);
+          		info->hold_count--;
+          	} else {
+          		freq_target = (unsigned int)div64_u64((u64)policy->max * load, target_load);
+          	}
+          
+          	freq_target = clamp(freq_target, policy->min, policy->max);
+          
+          	if (freq_target != info->target_freq) {
+          		info->target_freq = freq_target;
+          		if (policy->fast_switch_enabled) {
+          			cpufreq_driver_fast_switch(policy, freq_target);
+          		} else {
+          			__cpufreq_driver_target(policy, freq_target, CPUFREQ_RELATION_L);
+          		}
+          	}
+          }
+          
+          static void zv_work_handler(struct work_struct *work)
+          {
+          	struct zv_policy_info *zpinfo = container_of(work, struct zv_policy_info, work.work);
+          	unsigned int delay; /* Deklarasi harus di atas */
+          	
+          	if (!zpinfo->is_active)
+          		return;
+          
+          	zv_eval(zpinfo->policy);
+          	
+          	/* Inisialisasi variabel setelah eksekusi kode (Standard C90) */
+          	delay = (per_cpu(zv_info, zpinfo->policy->cpu).prev_load > 5 || 
+          						  per_cpu(zv_info, zpinfo->policy->cpu).hold_count > 0) ? 16 : 100;
+          	
+          	schedule_delayed_work_on(zpinfo->policy->cpu, &zpinfo->work, msecs_to_jiffies(delay));
+          }
+          
+          static int zv_init(struct cpufreq_policy *policy)
+          {
+          	struct zv_policy_info *zpinfo = kzalloc(sizeof(*zpinfo), GFP_KERNEL);
+          	if (!zpinfo) return -ENOMEM;
+          
+          	zpinfo->policy = policy;
+          	zpinfo->is_active = false;
+          	INIT_DELAYED_WORK(&zpinfo->work, zv_work_handler);
+          	policy->governor_data = zpinfo;
+          	return 0;
+          }
+          
+          static void zv_exit(struct cpufreq_policy *policy)
+          {
+          	struct zv_policy_info *zpinfo = policy->governor_data;
+          	if (zpinfo) {
+          		zpinfo->is_active = false;
+          		cancel_delayed_work_sync(&zpinfo->work);
+          		kfree(zpinfo);
+          		policy->governor_data = NULL;
+          	}
+          }
+          
+          static int zv_start(struct cpufreq_policy *policy)
+          {
+          	struct zv_policy_info *zpinfo = policy->governor_data;
+          	unsigned int cpu;
+          
+          	if (!zpinfo) return -EINVAL;
+          	zpinfo->is_active = true;
+          
+          	for_each_cpu(cpu, policy->cpus) {
+          		struct zv_cpu_info *info = &per_cpu(zv_info, cpu);
+          		info->prev_wall = ktime_to_us(ktime_get());
+          		info->prev_idle = get_cpu_idle_time_gki(cpu);
+          		info->hold_count = 0;
+          		info->prev_load = 0;
+          		info->target_freq = policy->cur;
+          	}
+          
+          	schedule_delayed_work_on(policy->cpu, &zpinfo->work, msecs_to_jiffies(16));
+          	return 0;
+          }
+          
+          static void zv_stop(struct cpufreq_policy *policy)
+          {
+          	struct zv_policy_info *zpinfo = policy->governor_data;
+          	if (zpinfo) {
+          		zpinfo->is_active = false;
+          		cancel_delayed_work_sync(&zpinfo->work);
+          	}
+          }
+          
+          static struct cpufreq_governor gov_zixine_velocity = {
+          	.name		= "zixine_velocity",
+          	.flags		= CPUFREQ_GOV_DYNAMIC_SWITCHING,
+          	.owner		= THIS_MODULE,
+          	.init		= zv_init,
+          	.exit		= zv_exit,
+          	.start		= zv_start,
+          	.stop		= zv_stop,
+          };
+          
+          static int __init zv_gov_init(void)
+          {
+          	return cpufreq_register_governor(&gov_zixine_velocity);
+          }
+          
+          static void __exit zv_gov_exit(void)
+          {
+          	cpufreq_unregister_governor(&gov_zixine_velocity);
+          }
+          
+          module_init(zv_gov_init);
+          module_exit(zv_gov_exit);
+          
+          MODULE_AUTHOR("Zixine");
+          MODULE_DESCRIPTION("Zixine Velocity Governor v1.2.8 (GKI 12-5.10 Fix)");
+          MODULE_LICENSE("GPL v2");
+          INNER_EOF
+          )
+          EOF
+
+          # Catatan: Karena kita menjalankan ini di CI, lebih efisien menggunakan 
+          # perintah 'echo' atau 'cat' untuk membuat filenya langsung.
+
+          # 2. Daftarkan ke Makefile (Gunakan sed untuk menambahkannya secara rapi)
+          # Kita masukkan tepat di bawah governor ondemand
+          sed -i '/cpufreq_ondemand.o/a obj-$(CONFIG_CPU_FREQ_GOV_ZIXINE_VELOCITY)	+= cpufreq_zixine.o' drivers/cpufreq/Makefile
+
+          # 3. Daftarkan ke Kconfig (Masukkan sebelum baris terakhir 'endif')
+          # Cari baris 'config CPUFREQ_DT' dan masukkan sebelum itu
+          sed -i '/config CPUFREQ_DT/i \
+          config CPU_FREQ_GOV_ZIXINE_VELOCITY \
+          	tristate "'\''zixine_velocity'\'' cpufreq governor" \
+          	depends on CPU_FREQ \
+          	help \
+          	  '\''zixine_velocity'\'' - Governor ini dioptimalkan khusus untuk \
+          	  kestabilan dan kehalusan sistem (Smoothness Edition). \
+          \
+          ' drivers/cpufreq/Kconfig
+
       - name: Setup Variant
         working-directory: gki/common
         run: |
