@@ -76,7 +76,7 @@ jobs:
           cd gki/common
           git remote add XTENSEI https://github.com/XTENSEI/kernel_common_5.10.git
           git fetch -j12 XTENSEI
-          git checkout -b update-android12-5.10 XTENSEI/lts
+          git checkout -b update-android12-5.10 XTENSEI/android12-5.10
           rm -rf drivers/staging/kernelsu
       
       - name: Naga Patch
