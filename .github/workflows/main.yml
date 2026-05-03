@@ -74,9 +74,9 @@ jobs:
       - name: Setup Kernel Source
         run: |
           cd gki/common
-          git remote add waheiiiddd-lab https://github.com/waheiiiddd-lab/android_kernel_common-5.10.git
-          git fetch -j12 waheiiiddd-lab
-          git checkout -b update-lts waheiiiddd-lab/lts
+          git remote add XTENSEI https://github.com/XTENSEI/kernel_common_5.10.git
+          git fetch -j12 XTENSEI
+          git checkout -b update-android12-5.10 XTENSEI/lts
           rm -rf drivers/staging/kernelsu
       
       - name: Naga Patch
