@@ -90,13 +90,11 @@ jobs:
       - name: Inject Zixine Velocity Governor
         working-directory: gki/common
         run: |
-          # 1. Buat file source code cpufreq_zixine.c
+          # 1. Buat file source code cpufreq_zixine.c secara langsung tanpa nested cat
           cat <<'EOF' > drivers/cpufreq/cpufreq_zixine.c
-          $(cat <<'INNER_EOF'
-                    // SPDX-License-Identifier: GPL-2.0
+          // SPDX-License-Identifier: GPL-2.0
           /*
            * Zixine Velocity v1.2.8 - GKI Fixed
-           * fix implicit declaration dan ISO C90 declaration rules.
            */
           
           #include <linux/cpufreq.h>
